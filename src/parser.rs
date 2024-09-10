@@ -489,3 +489,289 @@ impl fmt::Display for AST<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::{Ok, Result};
+
+    use super::{Op, Parser, Type, AST};
+
+    #[test]
+    fn test_expressions_st() -> Result<()> {
+        let input = "(1 + 3) * 2;";
+        let mut parser = Parser::new(input);
+
+        let result = parser.parse();
+        println!("{:?}", result);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_var() -> Result<()> {
+        let input = r#"let num = 1;
+        let num2 = 2;
+        let num3 = 3;
+        "#;
+        let expected = vec![
+            AST::Let {
+                ident: "num",
+                value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
+            },
+            AST::Let {
+                ident: "num2",
+                value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(2.0))])),
+            },
+            AST::Let {
+                ident: "num3",
+                value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(3.0))])),
+            },
+        ];
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_return() -> Result<()> {
+        let input = r#"return 1;
+        return 2 + 2;
+        return 3;
+        "#;
+
+        let expected = vec![
+            AST::Return {
+                value: Box::new(AST::Type(Type::Number(1.0))),
+            },
+            AST::Return {
+                value: Box::new(AST::Expr(
+                    Op::Plus,
+                    vec![AST::Type(Type::Number(2.0)), AST::Type(Type::Number(2.0))],
+                )),
+            },
+            AST::Return {
+                value: Box::new(AST::Type(Type::Number(3.0))),
+            },
+        ];
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_if() -> Result<()> {
+        let input = r#"if true {
+            let numero = 1;
+            let dos = "dos";
+        }
+        "#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![AST::If {
+            condition: Box::new(AST::Type(Type::Bool(true))),
+            yes: vec![
+                AST::Let {
+                    ident: "numero",
+                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
+                },
+                AST::Let {
+                    ident: "dos",
+                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::String("dos"))])),
+                },
+            ],
+            no: None,
+        }];
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_fun_literal() -> Result<()> {
+        let input = r#"fn quick_sort(){
+            let array = 0;
+            let pivot = 1;
+            
+            return 0; 
+        }"#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![AST::Fn {
+            name: Some("quick_sort"),
+            params: vec![],
+            body: vec![
+                AST::Let {
+                    ident: "array",
+                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(0.0))])),
+                },
+                AST::Let {
+                    ident: "pivot",
+                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
+                },
+                AST::Return {
+                    value: Box::new(AST::Type(Type::Number(0.0))),
+                },
+            ],
+        }];
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_fun_expr() -> Result<()> {
+        let input = r#"let quick = fn(param1, param2){
+            return 0; 
+        };"#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![AST::Let {
+            ident: "quick",
+            value: Box::new(AST::Expr(
+                Op::Assing,
+                vec![AST::Fn {
+                    name: None,
+                    params: vec![
+                        AST::Type(Type::Ident("param1")),
+                        AST::Type(Type::Ident("param2")),
+                    ],
+                    body: vec![AST::Return {
+                        value: Box::new(AST::Type(Type::Number(0.0))),
+                    }],
+                }],
+            )),
+        }];
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_call_expr() -> Result<()> {
+        let input = r#"add(1, 2);
+        minus(1 + 2, 0);
+        "#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![
+            AST::Expr(
+                Op::Fn,
+                vec![
+                    AST::Call {
+                        calle: Box::new(AST::Type(Type::Ident("add"))),
+                        args: vec![AST::Type(Type::Number(1.0)), AST::Type(Type::Number(2.0))],
+                    },
+                    AST::Type(Type::Nil),
+                ],
+            ),
+            AST::Expr(
+                Op::Fn,
+                vec![
+                    AST::Call {
+                        calle: Box::new(AST::Type(Type::Ident("minus"))),
+                        args: vec![
+                            AST::Expr(
+                                Op::Plus,
+                                vec![AST::Type(Type::Number(1.0)), AST::Type(Type::Number(2.0))],
+                            ),
+                            AST::Type(Type::Number(0.0)),
+                        ],
+                    },
+                    AST::Type(Type::Nil),
+                ],
+            ),
+        ];
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_primary_expr() -> Result<()> {
+        let input = r#"variable
+        10;
+        "verbo"
+        "#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![
+            AST::Type(Type::Ident("variable")),
+            AST::Type(super::Type::Number(10.0)),
+            AST::Type(Type::String("verbo")),
+        ];
+
+        assert_test(expected, statements)
+    }
+
+    #[test]
+    fn test_bang_expr() -> Result<()> {
+        let input = r#"!true"#;
+
+        let mut parser = Parser::new(input);
+        let statements = match parser.parse() {
+            AST::Program { statements } => statements,
+            _ => panic!("expected PROGRAM AST"),
+        };
+
+        let expected = vec![AST::Expr(
+            Op::Bang,
+            vec![AST::Type(Type::Bool(true)), AST::Type(Type::Nil)],
+        )];
+
+        dbg!(expected);
+        dbg!(statements);
+
+        Ok(())
+    }
+
+    fn assert_test(expected: Vec<AST<'_>>, statements: Vec<AST<'_>>) -> Result<()> {
+        assert_eq!(
+            expected.len(),
+            statements.len(),
+            "expected: {}, got: {}",
+            expected.len(),
+            statements.len()
+        );
+
+        for (i, stmt) in statements.iter().enumerate() {
+            assert_eq!(
+                expected[i], *stmt,
+                "expected: {:?}, got: {:?}",
+                expected[i], stmt
+            )
+        }
+
+        Ok(())
+    }
+}
