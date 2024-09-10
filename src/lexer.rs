@@ -34,9 +34,9 @@ pub enum Token<'de> {
     Else,
     Return,
     True,
-    Var,
+    Let,
     Or,
-    Fun,
+    Fn,
     False,
     If,
     Nil,
@@ -78,8 +78,8 @@ impl fmt::Display for Token<'_> {
                 Token::If => "IF if null",
                 Token::Else => "ELSE else null",
                 Token::Print => "PRINT print null",
-                Token::Var => "VAR var null",
-                Token::Fun => "FUN fun null",
+                Token::Let => "LET let null",
+                Token::Fn => "FN fun null",
                 Token::Nil => "NIL nil null",
                 Token::Return => "RETURN return null",
 
@@ -233,9 +233,9 @@ impl<'de> Lexer<'de> {
 
     fn read_ident(&self, literal: &'de str) -> Token<'de> {
         return match literal {
-            "fun" => Token::Fun,
+            "fn" => Token::Fn,
             "return" => Token::Return,
-            "var" => Token::Var,
+            "let" => Token::Let,
             "and" => Token::And,
             "or" => Token::Or,
             "if" => Token::If,
@@ -384,19 +384,19 @@ mod test {
 
     #[test]
     fn test_keyword() -> Result<()> {
-        let input = r#"and else false fun if nil or return true var"#;
+        let input = r#"and else false fn if nil or return true let"#;
 
         let expected = vec![
             Token::And,
             Token::Else,
             Token::False,
-            Token::Fun,
+            Token::Fn,
             Token::If,
             Token::Nil,
             Token::Or,
             Token::Return,
             Token::True,
-            Token::Var,
+            Token::Let,
             Token::EOF,
         ];
 

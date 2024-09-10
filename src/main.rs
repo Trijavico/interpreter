@@ -1,5 +1,7 @@
 use std::{env, fs, process};
 
+use monkelang::lexer::Lexer;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
@@ -20,6 +22,20 @@ fn main() {
                 eprintln!("Failed to read file {}", file_path);
                 String::new()
             });
+
+            let lexer = Lexer::new(&file_contents);
+            let mut err = 0;
+            for token in lexer {
+                match token {
+                    Ok(tok) => println!("{tok}"),
+                    Err(msg) => {
+                        err = 65;
+                        eprintln!("{}", msg);
+                    }
+                };
+            }
+
+            process::exit(err);
         }
         "parse" => todo!(),
         "eval" => todo!(),
