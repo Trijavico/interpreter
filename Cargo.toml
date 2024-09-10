@@ -1,0 +1,8 @@
+[package]
+name = "monkelang"
+version = "0.1.0"
+authors = ["Trijavico <javier.penaperez08@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.87"
