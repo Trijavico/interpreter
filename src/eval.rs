@@ -1,39 +1,39 @@
 use anyhow::Result;
 use core::fmt;
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::parser::{Op, Type, AST};
 
-pub struct Env<'de> {
-    store: HashMap<&'de str, Value<'de>>,
+pub struct Env {
+    store: HashMap<String, Value>,
 }
 
-impl<'de> Env<'de> {
+impl<'de> Env {
     pub fn new() -> Self {
         return Self {
             store: HashMap::new(),
         };
     }
 
-    pub fn get(&self, name: &'de str) -> Option<&Value<'de>> {
+    pub fn get(&self, name: &'de str) -> Option<&Value> {
         return self.store.get(name);
     }
 
-    pub fn set(&mut self, name: &'de str, obj: Value<'de>) {
-        self.store.insert(name, obj);
+    pub fn set(&mut self, name: &'de str, obj: Value) {
+        self.store.insert(name.to_owned(), obj);
     }
 }
 
-pub struct Evaluator<'de> {
-    env: Env<'de>,
+pub struct Evaluator {
+    env: Env,
 }
 
-impl<'de> Evaluator<'de> {
+impl<'de> Evaluator {
     pub fn new() -> Self {
         return Self { env: Env::new() };
     }
 
-    pub fn eval_program(&mut self, tree: AST<'de>) -> Result<Value<'de>> {
+    pub fn eval_program(&mut self, tree: AST<'de>) -> Result<Value> {
         let to_return = match tree {
             AST::Fn { .. } => todo!(),
             AST::Call { .. } => todo!(),
@@ -53,7 +53,7 @@ impl<'de> Evaluator<'de> {
                 Op::Minus => {
                     let val = self.eval_program(operands.pop().unwrap())?;
                     if let Value::Number(num) = val {
-                        Value::Number(-num);
+                        Value::Number(-1.0 * num);
                     }
                     return Err(self.err_msg(format!("type mismatch: {}", val)));
                 }
@@ -90,7 +90,7 @@ impl<'de> Evaluator<'de> {
         return Ok(to_return);
     }
 
-    fn eval_stmts(&mut self, statements: Vec<AST<'de>>) -> Result<Value<'de>> {
+    fn eval_stmts(&mut self, statements: Vec<AST<'de>>) -> Result<Value> {
         let mut result = Ok(Value::Nil);
         for stmt in statements {
             if matches!(stmt, AST::Return { .. }) {
@@ -111,7 +111,7 @@ impl<'de> Evaluator<'de> {
         return result;
     }
 
-    fn eval_infix_numbers(&self, op: Op, left: f64, right: f64) -> Result<Value<'de>> {
+    fn eval_infix_numbers(&self, op: Op, left: f64, right: f64) -> Result<Value> {
         let result = match op {
             Op::Plus => Value::Number(left + right),
             Op::Minus => Value::Number(left - right),
@@ -136,7 +136,7 @@ impl<'de> Evaluator<'de> {
         return Ok(result);
     }
 
-    fn eval_infix_booleans(&self, op: Op, left: bool, right: bool) -> Result<Value<'de>> {
+    fn eval_infix_booleans(&self, op: Op, left: bool, right: bool) -> Result<Value> {
         let result = match op {
             Op::And => Value::Bool(left && right),
             Op::Or => Value::Bool(left || right),
@@ -153,7 +153,7 @@ impl<'de> Evaluator<'de> {
         condition: AST<'de>,
         yes: Vec<AST<'de>>,
         no: Option<Vec<AST<'de>>>,
-    ) -> Result<Value<'de>> {
+    ) -> Result<Value> {
         let condition = self.eval_program(condition)?;
         if self.is_truth(condition) {
             return self.eval_stmts(yes);
@@ -164,7 +164,7 @@ impl<'de> Evaluator<'de> {
         }
     }
 
-    fn is_truth(&self, val: Value<'de>) -> bool {
+    fn is_truth(&self, val: Value) -> bool {
         match val {
             Value::Bool(false) => false,
             Value::Nil => false,
@@ -172,10 +172,10 @@ impl<'de> Evaluator<'de> {
         }
     }
 
-    fn read_type(&self, value: Type<'de>) -> Result<Value<'de>> {
+    fn read_type(&self, value: Type<'de>) -> Result<Value> {
         let evaluated = match value {
             Type::Bool(bool) => Value::Bool(bool),
-            Type::String(str) => Value::String(Cow::Borrowed(str)),
+            Type::String(str) => Value::String(str.to_owned()),
             Type::Number(num) => Value::Number(num),
             Type::Nil => Value::Nil,
             Type::Ident(ident) => match self.env.get(ident) {
@@ -195,17 +195,17 @@ impl<'de> Evaluator<'de> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Value<'de> {
+pub enum Value {
     Number(f64),
-    Ident(&'de str),
-    String(Cow<'de, str>),
+    Ident(String),
+    String(String),
     Bool(bool),
-    Return(Box<Value<'de>>),
+    Return(Box<Value>),
     Idle,
     Nil,
 }
 
-impl<'de> fmt::Display for Value<'de> {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

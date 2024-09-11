@@ -1,6 +1,6 @@
 use std::{env, fs, process};
 
-use monkelang::{eval::Evaluator, lexer::Lexer, parser::Parser};
+use monkelang::{eval::Evaluator, lexer::Lexer, parser::Parser, repl};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -12,6 +12,11 @@ fn main() {
     let command = &args[1];
 
     match command.as_str() {
+        "repl" => {
+            if let Err(err) = repl::start() {
+                eprintln!("{}", err);
+            }
+        }
         "tokenize" => {
             if args.len() < 3 {
                 eprintln!("Usage: {} <command>", &args[0]);

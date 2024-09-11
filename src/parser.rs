@@ -77,30 +77,26 @@ impl<'de> Parser<'de> {
             Token::True => AST::Type(Type::Bool(true)),
             Token::False => AST::Type(Type::Bool(false)),
             Token::Fn => self.parse_fun(),
-
-            Token::Bang => {
-                let (_, r_binding) = self.prefix_binding_power(Op::Bang);
-                let r_side = self.parse_expression(r_binding);
-
-                AST::Expr(Op::Bang, vec![r_side])
-            }
-
-            Token::Minus => {
-                let (_, r_binding) = self.prefix_binding_power(Op::Minus);
-                let r_side = self.parse_expression(r_binding);
-                AST::Expr(Op::Minus, vec![r_side])
-            }
+            Token::If => self.parse_if(),
 
             Token::Assign => {
                 let r_side = self.parse_expression(0);
                 AST::Expr(Op::Assing, vec![r_side])
             }
 
-            Token::LParen => {
-                let r_side = self.parse_expression(0);
-                self.expect_peek(Token::RParen);
-                AST::Expr(Op::Grouped, vec![r_side])
+            Token::Bang | Token::Minus | Token::LParen => {
+                let op = match l_side {
+                    Token::Bang => Op::Bang,
+                    Token::Minus => Op::Minus,
+                    Token::LParen => Op::Grouped,
+                    _ => return AST::Type(Type::Nil),
+                };
+
+                let (_, r_binding) = self.prefix_binding_power(op);
+                let r_side = self.parse_expression(r_binding);
+                AST::Expr(op, vec![r_side])
             }
+
             _ => return AST::Type(Type::Nil),
         };
 
@@ -228,7 +224,9 @@ impl<'de> Parser<'de> {
     }
 
     fn parse_if(&mut self) -> AST<'de> {
-        self.lexer.next();
+        if matches!(self.lexer.peek(), Some(Ok(Token::If))) {
+            self.lexer.next();
+        }
         let condition = self.parse_expression(0);
 
         self.expect_peek(Token::LBrace);
@@ -751,6 +749,16 @@ mod tests {
 
         dbg!(expected);
         dbg!(statements);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_prueba() -> Result<()> {
+        let input = "let d = if 10 > 1 { 99 } else { 100 };";
+        let mut parser = Parser::new(input);
+
+        println!("{:?}", parser.parse());
 
         Ok(())
     }
