@@ -1,8 +1,9 @@
 use anyhow::Result;
 use core::fmt;
+use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
-pub enum Token<'de> {
+pub enum Token {
     Comma,
     Dot,
     Minus,
@@ -25,9 +26,9 @@ pub enum Token<'de> {
     Assign,
     AssignEqual,
 
-    Ident(&'de str),
-    String(&'de str),
-    Number(&'de str, f64),
+    Ident(Rc<str>),
+    String(Rc<str>),
+    Number(Rc<str>, f64),
 
     And,
     Print,
@@ -44,7 +45,7 @@ pub enum Token<'de> {
     EOF,
 }
 
-impl fmt::Display for Token<'_> {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -99,22 +100,16 @@ impl fmt::Display for Token<'_> {
     }
 }
 
-pub struct Lexer<'de> {
-    input: &'de str,
+pub struct Lexer {
+    input: String,
     char: char,
     line: usize,
     current_pos: usize,
     next_pos: usize,
 }
 
-impl<'de> Lexer<'de> {
-    pub fn new(input: &'de str) -> Self {
-        let input = if input.ends_with('\0') {
-            &input[..input.len() - 1]
-        } else {
-            input
-        };
-
+impl Lexer {
+    pub fn new(input: String) -> Self {
         let mut lexer = Self {
             input,
             char: '\0',
@@ -176,7 +171,7 @@ impl<'de> Lexer<'de> {
         }
     }
 
-    fn is_post_equal(&mut self, yes: Token<'de>, no: Token<'de>) -> Token<'de> {
+    fn is_post_equal(&mut self, yes: Token, no: Token) -> Token {
         if self.peek() == '=' {
             self.next_char();
 
@@ -186,7 +181,7 @@ impl<'de> Lexer<'de> {
         return no;
     }
 
-    fn read_string(&mut self) -> Option<Result<Token<'de>>> {
+    fn read_string(&mut self) -> Option<Result<Token>> {
         let start_pos = self.current_pos + 1;
         while self.peek() != '"' && self.peek() != '\0' {
             self.next_char();
@@ -202,15 +197,15 @@ impl<'de> Lexer<'de> {
         }
 
         if start_pos == self.current_pos + 1 {
-            let str = &self.input[start_pos..start_pos];
+            let str: Rc<str> = self.input[start_pos..start_pos].into();
             return Some(Ok(Token::String(str)));
         }
 
-        let str = &self.input[start_pos..=self.current_pos];
+        let str: Rc<str> = self.input[start_pos..=self.current_pos].into();
         return Some(Ok(Token::String(str)));
     }
 
-    fn read_number(&mut self) -> &'de str {
+    fn read_number(&mut self) -> Rc<str> {
         let start_pos = self.current_pos;
 
         while self.peek().is_ascii_digit() && self.peek() != '\0' {
@@ -225,13 +220,13 @@ impl<'de> Lexer<'de> {
                 }
             }
 
-            return &self.input[start_pos..=self.current_pos];
+            return self.input[start_pos..=self.current_pos].into();
         }
 
-        return &self.input[start_pos..=self.current_pos];
+        return self.input[start_pos..=self.current_pos].into();
     }
 
-    fn read_ident(&self, literal: &'de str) -> Token<'de> {
+    fn read_ident(&self, literal: &str) -> Token {
         return match literal {
             "fn" => Token::Fn,
             "return" => Token::Return,
@@ -244,13 +239,13 @@ impl<'de> Lexer<'de> {
             "false" => Token::False,
             "nil" => Token::Nil,
             "print" => Token::Print,
-            _ => Token::Ident(literal),
+            _ => Token::Ident(literal.into()),
         };
     }
 }
 
-impl<'de> Iterator for Lexer<'de> {
-    type Item = Result<Token<'de>>;
+impl Iterator for Lexer {
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_pos > self.input.len() {
@@ -272,17 +267,17 @@ impl<'de> Iterator for Lexer<'de> {
             ':' => Token::Colon,
             '+' => Token::Plus,
             '/' => Token::Slash,
+            '!' => self.is_post_equal(Token::BangEqual, Token::Bang),
+            '=' => self.is_post_equal(Token::AssignEqual, Token::Assign),
+            '>' => self.is_post_equal(Token::GreaterEqual, Token::Greater),
+            '<' => self.is_post_equal(Token::LessEqual, Token::Less),
+
             '"' => {
                 let item = self.read_string();
                 self.next_char(); // consume '"'
                 self.next_char(); // consume the next after '"'
                 return item;
             }
-
-            '!' => self.is_post_equal(Token::BangEqual, Token::Bang),
-            '=' => self.is_post_equal(Token::AssignEqual, Token::Assign),
-            '>' => self.is_post_equal(Token::GreaterEqual, Token::Greater),
-            '<' => self.is_post_equal(Token::LessEqual, Token::Less),
 
             '0'..='9' => {
                 let literal = self.read_number();

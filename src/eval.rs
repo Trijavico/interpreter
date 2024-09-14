@@ -1,26 +1,26 @@
 use anyhow::Result;
 use core::fmt;
-use std::collections::HashMap;
+use std::{borrow::Borrow, collections::HashMap, rc::Rc};
 
 use crate::parser::{Op, Type, AST};
 
 pub struct Env {
-    store: HashMap<String, Value>,
+    store: HashMap<Rc<str>, Value>,
 }
 
-impl<'de> Env {
+impl Env {
     pub fn new() -> Self {
         return Self {
             store: HashMap::new(),
         };
     }
 
-    pub fn get(&self, name: &'de str) -> Option<&Value> {
+    pub fn get(&self, name: &Rc<str>) -> Option<&Value> {
         return self.store.get(name);
     }
 
-    pub fn set(&mut self, name: &'de str, obj: Value) {
-        self.store.insert(name.to_owned(), obj);
+    pub fn set(&mut self, name: Rc<str>, obj: Value) {
+        self.store.insert(name, obj);
     }
 }
 
@@ -28,47 +28,48 @@ pub struct Evaluator {
     env: Env,
 }
 
-impl<'de> Evaluator {
+impl Evaluator {
     pub fn new() -> Self {
         return Self { env: Env::new() };
     }
 
-    pub fn eval_program(&mut self, tree: AST<'de>) -> Result<Value> {
+    pub fn eval(&mut self, tree: AST) -> Result<Value> {
         let to_return = match tree {
-            AST::Fn { .. } => todo!(),
-            AST::Call { .. } => todo!(),
-            AST::Return { value } => Value::Return(Box::new(self.eval_program(*value)?)),
-            AST::Type(val) => self.read_type(val)?,
             AST::Program { statements } => self.eval_stmts(statements)?,
+            AST::Type(val) => self.read_type(val)?,
+            AST::Return { value } => Value::Return(Box::new(self.eval(*value)?)),
             AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
 
+            AST::Fn { .. } => todo!(),
+            AST::Call { .. } => todo!(),
+
             AST::Let { ident, value } => {
-                let evaluated = self.eval_program(*value)?;
+                let evaluated = self.eval(*value)?;
                 self.env.set(ident, evaluated);
                 Value::Idle
             }
 
             AST::Expr(op, mut operands) => match op {
-                Op::Grouped => self.eval_program(operands.pop().unwrap())?,
+                Op::Grouped => self.eval(operands.pop().unwrap())?,
                 Op::Minus => {
-                    let val = self.eval_program(operands.pop().unwrap())?;
+                    let val = self.eval(operands.pop().unwrap())?;
                     if let Value::Number(num) = val {
                         Value::Number(-1.0 * num);
                     }
                     return Err(self.err_msg(format!("type mismatch: {}", val)));
                 }
                 Op::Bang => {
-                    let val = self.eval_program(operands.pop().unwrap())?;
+                    let val = self.eval(operands.pop().unwrap())?;
                     match val {
                         Value::Bool(val) => Value::Bool(!val),
                         Value::Nil => Value::Bool(true),
                         _ => return Err(self.err_msg(format!("type mismatch: {}", val))),
                     }
                 }
-                Op::Assing => self.eval_program(operands.pop().unwrap())?,
+                Op::Assing => self.eval(operands.pop().unwrap())?,
                 other_op => {
-                    let right = self.eval_program(operands.pop().unwrap())?;
-                    let left = self.eval_program(operands.pop().unwrap())?;
+                    let right = self.eval(operands.pop().unwrap())?;
+                    let left = self.eval(operands.pop().unwrap())?;
 
                     match (&left, &right) {
                         (Value::Number(l_val), Value::Number(r_val)) => {
@@ -90,14 +91,31 @@ impl<'de> Evaluator {
         return Ok(to_return);
     }
 
-    fn eval_stmts(&mut self, statements: Vec<AST<'de>>) -> Result<Value> {
+    fn eval_stmts(&mut self, statements: Vec<AST>) -> Result<Value> {
         let mut result = Ok(Value::Nil);
         for stmt in statements {
             if matches!(stmt, AST::Return { .. }) {
-                return self.eval_program(stmt);
+                return self.eval(stmt);
             }
 
-            result = self.eval_program(stmt);
+            result = self.eval(stmt);
+
+            if matches!(result, Err(_)) {
+                return result;
+            }
+
+            if matches!(result, Ok(Value::Return(_))) {
+                return result;
+            }
+        }
+
+        return result;
+    }
+
+    fn eval_block_stmt(&mut self, block: Rc<[AST]>) -> Result<Value> {
+        let mut result = Ok(Value::Nil);
+        for stmt in block.iter() {
+            result = self.eval(stmt.clone());
 
             if matches!(result, Err(_)) {
                 return result;
@@ -148,17 +166,12 @@ impl<'de> Evaluator {
         return Ok(result);
     }
 
-    fn eval_if(
-        &mut self,
-        condition: AST<'de>,
-        yes: Vec<AST<'de>>,
-        no: Option<Vec<AST<'de>>>,
-    ) -> Result<Value> {
-        let condition = self.eval_program(condition)?;
+    fn eval_if(&mut self, condition: AST, yes: Rc<[AST]>, no: Option<Rc<[AST]>>) -> Result<Value> {
+        let condition = self.eval(condition)?;
         if self.is_truth(condition) {
-            return self.eval_stmts(yes);
+            return self.eval_block_stmt(yes);
         } else if !matches!(no, None) {
-            return self.eval_stmts(no.unwrap());
+            return self.eval_block_stmt(no.unwrap());
         } else {
             return Ok(Value::Nil);
         }
@@ -172,14 +185,14 @@ impl<'de> Evaluator {
         }
     }
 
-    fn read_type(&self, value: Type<'de>) -> Result<Value> {
+    fn read_type(&self, value: Type) -> Result<Value> {
         let evaluated = match value {
             Type::Bool(bool) => Value::Bool(bool),
-            Type::String(str) => Value::String(str.to_owned()),
+            Type::String(str) => Value::String(str),
             Type::Number(num) => Value::Number(num),
             Type::Nil => Value::Nil,
-            Type::Ident(ident) => match self.env.get(ident) {
-                Some(val) => val.to_owned(),
+            Type::Ident(ident) => match self.env.get(ident.borrow()) {
+                Some(val) => val.clone(),
                 None => {
                     return Err(self.err_msg(format!("reference error: '{}' not declared.", ident)))
                 }
@@ -197,8 +210,8 @@ impl<'de> Evaluator {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Number(f64),
-    Ident(String),
-    String(String),
+    Ident(Rc<str>),
+    String(Rc<str>),
     Bool(bool),
     Return(Box<Value>),
     Idle,

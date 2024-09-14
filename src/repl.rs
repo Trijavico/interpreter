@@ -18,11 +18,11 @@ pub fn start() -> Result<()> {
         stdout.lock().flush()?;
         let mut line = String::new();
         stdin.read_line(&mut line)?;
-        let trimmed_line = line.trim();
 
-        let mut parser = Parser::new(trimmed_line);
+        line = line.trim().to_string();
+        let mut parser = Parser::new(line);
 
-        match evalator.eval_program(parser.parse()) {
+        match evalator.eval(parser.parse()) {
             Ok(result) => {
                 if !matches!(result, eval::Value::Idle) {
                     println!("{result}");

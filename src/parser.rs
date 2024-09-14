@@ -1,29 +1,32 @@
 use core::fmt;
-use std::iter::Peekable;
+use std::{iter::Peekable, rc::Rc};
 
 use crate::lexer::{Lexer, Token};
 
-pub struct Parser<'de> {
-    lexer: Peekable<Lexer<'de>>,
+pub struct Parser {
+    lexer: Peekable<Lexer>,
 }
 
-impl<'de> Parser<'de> {
-    pub fn new(input: &'de str) -> Self {
+impl Parser {
+    pub fn new(input: String) -> Self {
         return Self {
             lexer: Lexer::new(input).peekable(),
         };
     }
 
-    pub fn parse(&mut self) -> AST<'de> {
+    pub fn parse(&mut self) -> AST {
         let statements = self.parse_statement();
 
         return AST::Program { statements };
     }
 
-    fn expect_peek(&mut self, tok: Token<'_>) {
+    fn expect_peek(&mut self, tok: Token) {
         let next_tok = match self.lexer.peek() {
             Some(Ok(next)) => next,
-            _ => panic!("expected {}", tok),
+            _ => {
+                //panic!("expected {}", tok)
+                todo!()
+            }
         };
 
         if *next_tok == tok {
@@ -31,8 +34,8 @@ impl<'de> Parser<'de> {
         }
     }
 
-    fn parse_statement(&mut self) -> Vec<AST<'de>> {
-        let mut statements: Vec<AST<'de>> = Vec::new();
+    fn parse_statement(&mut self) -> Vec<AST> {
+        let mut statements: Vec<AST> = Vec::new();
 
         while let Some(tok_result) = self.lexer.peek() {
             let tok = match tok_result {
@@ -64,7 +67,7 @@ impl<'de> Parser<'de> {
         return statements;
     }
 
-    fn parse_expression(&mut self, prev_binding: u8) -> AST<'de> {
+    fn parse_expression(&mut self, prev_binding: u8) -> AST {
         let l_side = match self.lexer.next() {
             Some(Ok(tok)) => tok,
             _ => return AST::Type(Type::Nil),
@@ -79,16 +82,20 @@ impl<'de> Parser<'de> {
             Token::Fn => self.parse_fun(),
             Token::If => self.parse_if(),
 
-            Token::Assign => {
+            Token::Assign | Token::LParen => {
                 let r_side = self.parse_expression(0);
-                AST::Expr(Op::Assing, vec![r_side])
+                if matches!(l_side, Token::LParen) {
+                    self.expect_peek(Token::RParen);
+                    AST::Expr(Op::Grouped, vec![r_side])
+                } else {
+                    AST::Expr(Op::Assing, vec![r_side])
+                }
             }
 
-            Token::Bang | Token::Minus | Token::LParen => {
+            Token::Bang | Token::Minus => {
                 let op = match l_side {
                     Token::Bang => Op::Bang,
                     Token::Minus => Op::Minus,
-                    Token::LParen => Op::Grouped,
                     _ => return AST::Type(Type::Nil),
                 };
 
@@ -190,7 +197,7 @@ impl<'de> Parser<'de> {
         return Some(binding_power);
     }
 
-    fn parse_var(&mut self) -> AST<'de> {
+    fn parse_var(&mut self) -> AST {
         self.lexer.next();
 
         let ident = match self.lexer.next() {
@@ -213,7 +220,7 @@ impl<'de> Parser<'de> {
         };
     }
 
-    fn parse_return(&mut self) -> AST<'de> {
+    fn parse_return(&mut self) -> AST {
         self.lexer.next();
         let value = self.parse_expression(0);
         self.expect_peek(Token::Semicolon);
@@ -223,7 +230,7 @@ impl<'de> Parser<'de> {
         };
     }
 
-    fn parse_if(&mut self) -> AST<'de> {
+    fn parse_if(&mut self) -> AST {
         if matches!(self.lexer.peek(), Some(Ok(Token::If))) {
             self.lexer.next();
         }
@@ -251,16 +258,16 @@ impl<'de> Parser<'de> {
         };
     }
 
-    fn parse_block(&mut self) -> Vec<AST<'de>> {
-        return self.parse_statement();
+    fn parse_block(&mut self) -> Rc<[AST]> {
+        return self.parse_statement().into();
     }
 
-    fn parse_fun(&mut self) -> AST<'de> {
+    fn parse_fun(&mut self) -> AST {
         if matches!(self.lexer.peek(), Some(Ok(Token::Fn))) {
             self.lexer.next();
         }
         let name = if let Some(Ok(Token::Ident(val))) = self.lexer.peek() {
-            let name = *val;
+            let name = val.clone();
             self.lexer.next();
             Some(name)
         } else {
@@ -277,8 +284,8 @@ impl<'de> Parser<'de> {
         return AST::Fn { name, params, body };
     }
 
-    fn parse_params(&mut self) -> Vec<AST<'de>> {
-        let mut params: Vec<AST<'_>> = Vec::new();
+    fn parse_params(&mut self) -> Rc<[AST]> {
+        let mut params: Vec<AST> = Vec::new();
 
         if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
             dbg!(self.lexer.peek());
@@ -290,14 +297,14 @@ impl<'de> Parser<'de> {
             params.push(self.parse_expression(0));
         }
 
-        return params;
+        return params.into();
     }
 
-    fn parse_print(&self) -> AST<'de> {
+    fn parse_print(&self) -> AST {
         todo!()
     }
 
-    fn parse_expression_statements(&mut self) -> AST<'de> {
+    fn parse_expression_statements(&mut self) -> AST {
         let expr = self.parse_expression(0);
         if matches!(self.lexer.peek(), Some(Ok(Token::Semicolon))) {
             self.lexer.next();
@@ -354,16 +361,16 @@ impl fmt::Display for Op {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Type<'de> {
-    String(&'de str),
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    String(Rc<str>),
     Number(f64),
-    Ident(&'de str),
+    Ident(Rc<str>),
     Bool(bool),
     Nil,
 }
 
-impl fmt::Display for Type<'_> {
+impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // NOTE: this feels more correct:
@@ -385,42 +392,43 @@ impl fmt::Display for Type<'_> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AST<'de> {
+pub enum AST {
     Program {
-        statements: Vec<AST<'de>>,
+        statements: Vec<AST>,
     },
 
-    Type(Type<'de>),
+    Type(Type),
 
-    Expr(Op, Vec<AST<'de>>),
+    Expr(Op, Vec<AST>),
 
     Let {
-        ident: &'de str,
-        value: Box<AST<'de>>, // Expr
+        ident: Rc<str>,
+        value: Box<AST>, // Expr
     },
 
     Fn {
-        name: Option<&'de str>,
-        params: Vec<AST<'de>>,
-        body: Vec<AST<'de>>,
+        name: Option<Rc<str>>,
+        params: Rc<[AST]>,
+        body: Rc<[AST]>,
     },
 
     Call {
-        calle: Box<AST<'de>>,
-        args: Vec<AST<'de>>,
+        calle: Box<AST>,
+        args: Rc<[AST]>,
     },
 
     Return {
-        value: Box<AST<'de>>, // Expr
+        value: Box<AST>, // Expr
     },
+
     If {
-        condition: Box<AST<'de>>,
-        yes: Vec<AST<'de>>,
-        no: Option<Vec<AST<'de>>>,
+        condition: Box<AST>,
+        yes: Rc<[AST]>,
+        no: Option<Rc<[AST]>>,
     },
 }
 
-impl fmt::Display for AST<'_> {
+impl fmt::Display for AST {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AST::Type(i) => write!(f, "{}", i),
@@ -445,24 +453,24 @@ impl fmt::Display for AST<'_> {
                     write!(f, "(fun")?;
                 }
 
-                for p in params {
+                for p in params.iter() {
                     write!(f, " {p}")?;
                 }
-                for stmt in body {
+                for stmt in body.iter() {
                     write!(f, " {}", stmt)?;
                 }
                 write!(f, "}}")
             }
             AST::Call { calle, args } => {
                 write!(f, "({calle}")?;
-                for a in args {
+                for a in args.iter() {
                     write!(f, " {a}")?
                 }
                 write!(f, ")")
             }
             AST::If { condition, yes, no } => {
                 write!(f, "if {condition} {{")?;
-                for stmt in yes {
+                for stmt in yes.iter() {
                     write!(f, " {stmt}")?;
                 }
 
@@ -470,7 +478,7 @@ impl fmt::Display for AST<'_> {
 
                 if let Some(no) = no {
                     write!(f, "else {{")?;
-                    for stmt in no {
+                    for stmt in no.iter() {
                         write!(f, " {stmt}")?;
                     }
                     write!(f, " }}")?;

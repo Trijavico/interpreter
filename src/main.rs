@@ -28,7 +28,7 @@ fn main() {
                 String::new()
             });
 
-            let lexer = Lexer::new(&file_contents);
+            let lexer = Lexer::new(file_contents);
             let mut err = 0;
             for token in lexer {
                 match token {
@@ -53,7 +53,7 @@ fn main() {
                 String::new()
             });
 
-            let mut parser = Parser::new(&file_contents);
+            let mut parser = Parser::new(file_contents);
             println!("{}", parser.parse());
         }
         "eval" => {
@@ -67,11 +67,11 @@ fn main() {
                 String::new()
             });
 
-            let mut parser = Parser::new(&file_contents);
+            let mut parser = Parser::new(file_contents);
             let mut evaluator = Evaluator::new();
             let program = parser.parse();
 
-            match evaluator.eval_program(program) {
+            match evaluator.eval(program) {
                 Ok(result) => println!("{result}"),
                 Err(err) => println!("{}", err),
             };
