@@ -49,35 +49,18 @@ impl Evaluator {
                 Value::Idle
             }
 
-            AST::Expr(op, mut operands) => match op {
-                Op::Grouped => self.eval(operands.pop().unwrap())?,
-                Op::Minus => {
-                    let val = self.eval(operands.pop().unwrap())?;
-                    if let Value::Number(num) = val {
-                        Value::Number(-1.0 * num);
-                    }
-                    return Err(self.err_msg(format!("type mismatch: {}", val)));
-                }
-                Op::Bang => {
-                    let val = self.eval(operands.pop().unwrap())?;
-                    match val {
-                        Value::Bool(val) => Value::Bool(!val),
-                        Value::Nil => Value::Bool(true),
-                        _ => return Err(self.err_msg(format!("type mismatch: {}", val))),
-                    }
-                }
-                Op::Assing => self.eval(operands.pop().unwrap())?,
-                other_op => {
+            AST::Expr(op, mut operands) => {
+                if operands.len() == 2 {
                     let right = self.eval(operands.pop().unwrap())?;
                     let left = self.eval(operands.pop().unwrap())?;
 
                     match (&left, &right) {
                         (Value::Number(l_val), Value::Number(r_val)) => {
-                            return self.eval_infix_numbers(other_op, *l_val, *r_val);
+                            return self.eval_infix_numbers(op, *l_val, *r_val);
                         }
                         (Value::Bool(_), Value::Bool(_)) => {
                             return self.eval_infix_booleans(
-                                other_op,
+                                op,
                                 self.is_truth(left),
                                 self.is_truth(right),
                             );
@@ -85,7 +68,29 @@ impl Evaluator {
                         _ => return Err(self.err_msg(format!("type mismatch: {} {}", left, right))),
                     }
                 }
-            },
+
+                match op {
+                    Op::Grouped => self.eval(operands.pop().unwrap())?,
+                    Op::Assing => self.eval(operands.pop().unwrap())?,
+                    Op::Minus => {
+                        let val = self.eval(operands.pop().unwrap())?;
+                        if let Value::Number(num) = val {
+                            return Ok(Value::Number(-1.0 * num));
+                        }
+                        return Err(self.err_msg(format!("type mismatch: {}", val)));
+                    }
+                    Op::Bang => {
+                        let val = self.eval(operands.pop().unwrap())?;
+                        match val {
+                            Value::Bool(val) => Value::Bool(!val),
+                            Value::Nil => Value::Bool(true),
+                            _ => return Err(self.err_msg(format!("type mismatch: {}", val))),
+                        }
+                    }
+
+                    _ => return Err(self.err_msg(format!("unknown opreator: {}", op))),
+                }
+            }
         };
 
         return Ok(to_return);

@@ -355,7 +355,7 @@ impl fmt::Display for Op {
                 Op::And => "and",
                 Op::Or => "or",
                 Op::Fn => "call",
-                Op::Grouped => "",
+                Op::Grouped => "group",
             }
         )
     }
