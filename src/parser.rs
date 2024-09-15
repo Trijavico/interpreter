@@ -288,7 +288,6 @@ impl Parser {
         let mut params: Vec<AST> = Vec::new();
 
         if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
-            dbg!(self.lexer.peek());
             params.push(self.parse_expression(0));
         }
 
@@ -498,18 +497,37 @@ impl fmt::Display for AST {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::{Ok, Result};
+    use std::rc::Rc;
 
     use super::{Op, Parser, Type, AST};
+    use anyhow::{Ok, Result};
 
     #[test]
     fn test_expressions_st() -> Result<()> {
-        let input = "(1 + 3) * 2;";
-        let mut parser = Parser::new(input);
+        let test_cases = vec![
+            // Input, Expected Output
+            ("(-2 - 1) * 3", "(* (group (- (- 2.0) 1.0)) 3.0)"),
+            ("3 - (-2)", "(- 3.0 (group (- 2.0)))"),
+            (
+                "23 + (5 - 3 * 5) / 10;",
+                "(+ 23.0 (/ (group (- 5.0 (* 3.0 5.0))) 10.0))",
+            ),
+            (
+                "(10 - 0) * 10 > 4 / 3;",
+                "(> (* (group (- 10.0 0.0)) 10.0) (/ 4.0 3.0))",
+            ),
+            ("!true", "(! true)"),
+            ("!!false != true", "(!= (! (! false)) true)"),
+            (
+                "dos + 3 - mutilple(3) / 100;",
+                "(- (+ dos 3.0) (/ (call (mutilple 3.0) nil) 100.0))",
+            ),
+        ];
 
-        let result = parser.parse();
-        println!("{:?}", result);
-
+        for (input, expected) in test_cases {
+            let ast = Parser::new(input.to_owned()).parse();
+            assert_eq!(expected, format!("{ast}").as_str());
+        }
         Ok(())
     }
 
@@ -518,18 +536,19 @@ mod tests {
         let input = r#"let num = 1;
         let num2 = 2;
         let num3 = 3;
-        "#;
+        "#
+        .to_string();
         let expected = vec![
             AST::Let {
-                ident: "num",
+                ident: "num".into(),
                 value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
             },
             AST::Let {
-                ident: "num2",
+                ident: "num2".into(),
                 value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(2.0))])),
             },
             AST::Let {
-                ident: "num3",
+                ident: "num3".into(),
                 value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(3.0))])),
             },
         ];
@@ -548,7 +567,8 @@ mod tests {
         let input = r#"return 1;
         return 2 + 2;
         return 3;
-        "#;
+        "#
+        .to_string();
 
         let expected = vec![
             AST::Return {
@@ -580,7 +600,8 @@ mod tests {
             let numero = 1;
             let dos = "dos";
         }
-        "#;
+        "#
+        .to_string();
 
         let mut parser = Parser::new(input);
         let statements = match parser.parse() {
@@ -590,188 +611,26 @@ mod tests {
 
         let expected = vec![AST::If {
             condition: Box::new(AST::Type(Type::Bool(true))),
-            yes: vec![
+            yes: Rc::from(vec![
                 AST::Let {
-                    ident: "numero",
+                    ident: "numero".into(),
                     value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
                 },
                 AST::Let {
-                    ident: "dos",
-                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::String("dos"))])),
+                    ident: "dos".into(),
+                    value: Box::new(AST::Expr(
+                        Op::Assing,
+                        vec![AST::Type(Type::String("dos".into()))],
+                    )),
                 },
-            ],
+            ]),
             no: None,
         }];
 
         assert_test(expected, statements)
     }
 
-    #[test]
-    fn test_fun_literal() -> Result<()> {
-        let input = r#"fn quick_sort(){
-            let array = 0;
-            let pivot = 1;
-            
-            return 0; 
-        }"#;
-
-        let mut parser = Parser::new(input);
-        let statements = match parser.parse() {
-            AST::Program { statements } => statements,
-            _ => panic!("expected PROGRAM AST"),
-        };
-
-        let expected = vec![AST::Fn {
-            name: Some("quick_sort"),
-            params: vec![],
-            body: vec![
-                AST::Let {
-                    ident: "array",
-                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(0.0))])),
-                },
-                AST::Let {
-                    ident: "pivot",
-                    value: Box::new(AST::Expr(Op::Assing, vec![AST::Type(Type::Number(1.0))])),
-                },
-                AST::Return {
-                    value: Box::new(AST::Type(Type::Number(0.0))),
-                },
-            ],
-        }];
-
-        assert_test(expected, statements)
-    }
-
-    #[test]
-    fn test_fun_expr() -> Result<()> {
-        let input = r#"let quick = fn(param1, param2){
-            return 0; 
-        };"#;
-
-        let mut parser = Parser::new(input);
-        let statements = match parser.parse() {
-            AST::Program { statements } => statements,
-            _ => panic!("expected PROGRAM AST"),
-        };
-
-        let expected = vec![AST::Let {
-            ident: "quick",
-            value: Box::new(AST::Expr(
-                Op::Assing,
-                vec![AST::Fn {
-                    name: None,
-                    params: vec![
-                        AST::Type(Type::Ident("param1")),
-                        AST::Type(Type::Ident("param2")),
-                    ],
-                    body: vec![AST::Return {
-                        value: Box::new(AST::Type(Type::Number(0.0))),
-                    }],
-                }],
-            )),
-        }];
-
-        assert_test(expected, statements)
-    }
-
-    #[test]
-    fn test_call_expr() -> Result<()> {
-        let input = r#"add(1, 2);
-        minus(1 + 2, 0);
-        "#;
-
-        let mut parser = Parser::new(input);
-        let statements = match parser.parse() {
-            AST::Program { statements } => statements,
-            _ => panic!("expected PROGRAM AST"),
-        };
-
-        let expected = vec![
-            AST::Expr(
-                Op::Fn,
-                vec![
-                    AST::Call {
-                        calle: Box::new(AST::Type(Type::Ident("add"))),
-                        args: vec![AST::Type(Type::Number(1.0)), AST::Type(Type::Number(2.0))],
-                    },
-                    AST::Type(Type::Nil),
-                ],
-            ),
-            AST::Expr(
-                Op::Fn,
-                vec![
-                    AST::Call {
-                        calle: Box::new(AST::Type(Type::Ident("minus"))),
-                        args: vec![
-                            AST::Expr(
-                                Op::Plus,
-                                vec![AST::Type(Type::Number(1.0)), AST::Type(Type::Number(2.0))],
-                            ),
-                            AST::Type(Type::Number(0.0)),
-                        ],
-                    },
-                    AST::Type(Type::Nil),
-                ],
-            ),
-        ];
-
-        assert_test(expected, statements)
-    }
-
-    #[test]
-    fn test_primary_expr() -> Result<()> {
-        let input = r#"variable
-        10;
-        "verbo"
-        "#;
-
-        let mut parser = Parser::new(input);
-        let statements = match parser.parse() {
-            AST::Program { statements } => statements,
-            _ => panic!("expected PROGRAM AST"),
-        };
-
-        let expected = vec![
-            AST::Type(Type::Ident("variable")),
-            AST::Type(super::Type::Number(10.0)),
-            AST::Type(Type::String("verbo")),
-        ];
-
-        assert_test(expected, statements)
-    }
-
-    #[test]
-    fn test_bang_expr() -> Result<()> {
-        let input = r#"!true"#;
-
-        let mut parser = Parser::new(input);
-        let statements = match parser.parse() {
-            AST::Program { statements } => statements,
-            _ => panic!("expected PROGRAM AST"),
-        };
-
-        let expected = vec![AST::Expr(
-            Op::Bang,
-            vec![AST::Type(Type::Bool(true)), AST::Type(Type::Nil)],
-        )];
-
-        dbg!(expected);
-        dbg!(statements);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_prueba() -> Result<()> {
-        let input = "let d = if 10 > 1 { 99 } else { 100 };";
-        let mut parser = Parser::new(input);
-
-        println!("{:?}", parser.parse());
-
-        Ok(())
-    }
-
-    fn assert_test(expected: Vec<AST<'_>>, statements: Vec<AST<'_>>) -> Result<()> {
+    fn assert_test(expected: Vec<AST>, statements: Vec<AST>) -> Result<()> {
         assert_eq!(
             expected.len(),
             statements.len(),

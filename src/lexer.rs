@@ -323,14 +323,15 @@ mod test {
         let input = r#"123
         123.456
         .456
-        123."#;
+        123."#
+            .to_string();
 
         let expected = vec![
-            Token::Number("123", 123.0),
-            Token::Number("123.456", 123.456),
+            Token::Number("123".into(), 123.0),
+            Token::Number("123.456".into(), 123.456),
             Token::Dot,
-            Token::Number("456", 456.0),
-            Token::Number("123.", 123.0),
+            Token::Number("456".into(), 456.0),
+            Token::Number("123.".into(), 123.0),
             Token::EOF,
         ];
 
@@ -355,9 +356,14 @@ mod test {
     #[test]
     fn test_string() -> Result<()> {
         let input = r#" ""
-        "string" "#;
+        "string" "#
+            .to_string();
 
-        let expected = vec![Token::String(""), Token::String("string"), Token::EOF];
+        let expected = vec![
+            Token::String("".into()),
+            Token::String("string".into()),
+            Token::EOF,
+        ];
 
         let lexer = Lexer::new(input);
 
@@ -379,7 +385,7 @@ mod test {
 
     #[test]
     fn test_keyword() -> Result<()> {
-        let input = r#"and else false fn if nil or return true let"#;
+        let input = r#"and else false fn if nil or return true let"#.to_string();
 
         let expected = vec![
             Token::And,
@@ -420,13 +426,14 @@ mod test {
 
 
 
-        end"#;
+        end"#
+            .to_string();
 
         let expected = vec![
-            Token::Ident("space"),
-            Token::Ident("tabs"),
-            Token::Ident("newlines"),
-            Token::Ident("end"),
+            Token::Ident("space".into()),
+            Token::Ident("tabs".into()),
+            Token::Ident("newlines".into()),
+            Token::Ident("end".into()),
             Token::EOF,
         ];
 
@@ -450,7 +457,7 @@ mod test {
 
     #[test]
     fn test_punctuation() -> Result<()> {
-        let input = "(){};,+-*!===<=>=!=<>/.";
+        let input = "(){};,+-*!===<=>=!=<>/.".to_string();
 
         let expected = vec![
             Token::LParen,
