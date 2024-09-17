@@ -39,6 +39,7 @@ pub enum Token {
     Or,
     Fn,
     False,
+    Len,
     If,
     Nil,
 
@@ -82,6 +83,7 @@ impl fmt::Display for Token {
                 Token::Let => "LET let null",
                 Token::Fn => "FN fun null",
                 Token::Nil => "NIL nil null",
+                Token::Len => "LEN len null",
                 Token::Return => "RETURN return null",
 
                 Token::Ident(val) => return write!(f, "IDENTIFIER {val} null"),
@@ -239,6 +241,7 @@ impl Lexer {
             "false" => Token::False,
             "nil" => Token::Nil,
             "print" => Token::Print,
+            "len" => Token::Len,
             _ => Token::Ident(literal.into()),
         };
     }

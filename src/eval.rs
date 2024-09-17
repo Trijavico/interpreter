@@ -54,6 +54,19 @@ impl Evaluator {
             AST::Return { value } => Value::Return(Box::new(self.eval(*value)?)),
             AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
 
+            AST::Len(expr) => {
+                let evaluated = self.eval(*expr)?;
+                match evaluated {
+                    Value::String(str) => Value::Number(str.len() as f64),
+                    _ => {
+                        return Err(self.err_msg(format!(
+                            "type mistmach: Expected string, got: {}",
+                            evaluated
+                        )))
+                    }
+                }
+            }
+
             AST::Let { ident, value } => {
                 let evaluated = self.eval(*value)?;
                 self.env.set(ident, evaluated);
@@ -127,6 +140,7 @@ impl Evaluator {
                     Op::Grouped => self.eval(operands.pop().unwrap())?,
                     Op::Assing => self.eval(operands.pop().unwrap())?,
                     Op::Fn => self.eval(operands.pop().unwrap())?,
+                    Op::Len => self.eval(operands.pop().unwrap())?,
                     Op::Minus => {
                         let val = self.eval(operands.pop().unwrap())?;
                         if let Value::Number(num) = val {

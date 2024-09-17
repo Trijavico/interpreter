@@ -23,10 +23,7 @@ impl Parser {
     fn expect_peek(&mut self, tok: Token) {
         let next_tok = match self.lexer.peek() {
             Some(Ok(next)) => next,
-            _ => {
-                //panic!("expected {}", tok)
-                todo!()
-            }
+            _ => todo!(),
         };
 
         if *next_tok == tok {
@@ -57,6 +54,7 @@ impl Parser {
                 | Token::Bang
                 | Token::Minus
                 | Token::True
+                | Token::Len
                 | Token::False => self.parse_expression_statements(),
                 _ => break,
             };
@@ -90,6 +88,14 @@ impl Parser {
                 } else {
                     AST::Expr(Op::Assing, vec![r_side])
                 }
+            }
+
+            Token::Len => {
+                self.expect_peek(Token::LParen);
+                let right = self.parse_expression(0);
+                self.expect_peek(Token::RParen);
+
+                AST::Expr(Op::Len, vec![AST::Len(Box::new(right))])
             }
 
             Token::Bang | Token::Minus => {
@@ -144,6 +150,7 @@ impl Parser {
                     args: self.parse_args(),
                 };
                 self.expect_peek(Token::RParen);
+
                 to_return = AST::Expr(op, vec![to_return]);
 
                 continue;
@@ -168,7 +175,7 @@ impl Parser {
 
     fn postfix_binding_power(&self, op: Op) -> Option<(u8, ())> {
         match op {
-            Op::Fn => Some((13, ())),
+            Op::Fn | Op::Len => Some((13, ())),
             _ => None,
         }
     }
@@ -352,6 +359,7 @@ pub enum Op {
     AssignEqual,
     Or,
     And,
+    Len,
 }
 
 impl fmt::Display for Op {
@@ -376,6 +384,7 @@ impl fmt::Display for Op {
                 Op::Or => "or",
                 Op::Fn => "call",
                 Op::Grouped => "group",
+                Op::Len => "len",
             }
         )
     }
@@ -426,6 +435,8 @@ pub enum AST {
         value: Box<AST>, // Expr
     },
 
+    Len(Box<AST>),
+
     Fn {
         name: Option<Rc<str>>,
         params: Rc<[Rc<str>]>,
@@ -459,6 +470,7 @@ impl fmt::Display for AST {
 
                 write!(f, "")
             }
+            AST::Len(expr) => write!(f, "{expr}"),
             AST::Expr(head, rest) => {
                 write!(f, "({}", head)?;
                 for s in rest {
