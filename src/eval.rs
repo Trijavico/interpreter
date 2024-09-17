@@ -4,19 +4,29 @@ use std::{borrow::Borrow, collections::HashMap, rc::Rc};
 
 use crate::parser::{Op, Type, AST};
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Env {
     store: HashMap<Rc<str>, Value>,
+    pub outer: Option<Box<Env>>,
 }
 
 impl Env {
     pub fn new() -> Self {
         return Self {
             store: HashMap::new(),
+            outer: None,
         };
     }
 
     pub fn get(&self, name: &Rc<str>) -> Option<&Value> {
-        return self.store.get(name);
+        if let Some(value) = self.store.get(name) {
+            return Some(value);
+        }
+
+        match &self.outer {
+            Some(outer) => outer.store.get(name),
+            None => None,
+        }
     }
 
     pub fn set(&mut self, name: Rc<str>, obj: Value) {
@@ -33,6 +43,10 @@ impl Evaluator {
         return Self { env: Env::new() };
     }
 
+    fn new_enclosed_eval(env: Env) -> Self {
+        return Self { env };
+    }
+
     pub fn eval(&mut self, tree: AST) -> Result<Value> {
         let to_return = match tree {
             AST::Program { statements } => self.eval_stmts(statements)?,
@@ -40,13 +54,41 @@ impl Evaluator {
             AST::Return { value } => Value::Return(Box::new(self.eval(*value)?)),
             AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
 
-            AST::Fn { .. } => todo!(),
-            AST::Call { .. } => todo!(),
-
             AST::Let { ident, value } => {
                 let evaluated = self.eval(*value)?;
                 self.env.set(ident, evaluated);
                 Value::Idle
+            }
+
+            AST::Fn { name, params, body } => {
+                let mut env = Env::new();
+                env.outer = Some(Box::new(self.env.clone()));
+
+                if let Some(fn_name) = name {
+                    self.env.set(
+                        fn_name,
+                        Value::Fn {
+                            params: params.clone(),
+                            body: body.clone(),
+                            env,
+                        },
+                    );
+
+                    return Ok(Value::Idle);
+                }
+
+                Value::Fn {
+                    params: params.clone(),
+                    body: body.clone(),
+                    env,
+                }
+            }
+
+            AST::Call { calle, args } => {
+                let function = self.eval(*calle)?;
+                let args = self.eval_args(args)?;
+
+                return self.apply_fn(function, args);
             }
 
             AST::Expr(op, mut operands) => {
@@ -58,6 +100,16 @@ impl Evaluator {
                         (Value::Number(l_val), Value::Number(r_val)) => {
                             return self.eval_infix_numbers(op, *l_val, *r_val);
                         }
+                        (Value::String(left), Value::String(right)) => {
+                            if matches!(op, Op::Plus) {
+                                let string = format!("{}{}", left, right);
+                                return Ok(Value::String(string.into()));
+                            }
+
+                            return Err(
+                                self.err_msg(format!("invalid operator: {}{}{}", left, op, right))
+                            );
+                        }
                         (Value::Bool(_), Value::Bool(_)) => {
                             return self.eval_infix_booleans(
                                 op,
@@ -65,13 +117,16 @@ impl Evaluator {
                                 self.is_truth(right),
                             );
                         }
-                        _ => return Err(self.err_msg(format!("type mismatch: {} {}", left, right))),
+                        _ => {
+                            return Err(self.err_msg(format!("type mismatch: {} {}", left, right)));
+                        }
                     }
                 }
 
                 match op {
                     Op::Grouped => self.eval(operands.pop().unwrap())?,
                     Op::Assing => self.eval(operands.pop().unwrap())?,
+                    Op::Fn => self.eval(operands.pop().unwrap())?,
                     Op::Minus => {
                         let val = self.eval(operands.pop().unwrap())?;
                         if let Value::Number(num) = val {
@@ -117,8 +172,39 @@ impl Evaluator {
         return result;
     }
 
+    fn eval_args(&mut self, args: Rc<[AST]>) -> Result<Vec<Value>> {
+        let mut result: Vec<Value> = Vec::new();
+        for arg in args.iter() {
+            let evaluated = self.eval(arg.clone())?;
+            result.push(evaluated);
+        }
+
+        return Ok(result);
+    }
+
+    fn apply_fn(&mut self, function: Value, args: Vec<Value>) -> Result<Value> {
+        match function {
+            Value::Fn { params, body, env } => {
+                let mut enclosed_eval = Evaluator::new_enclosed_eval(env);
+
+                for (i, param) in params.iter().enumerate() {
+                    enclosed_eval.env.set(param.clone(), args[i].clone());
+                }
+
+                let evaluated = enclosed_eval.eval_block_stmt(body)?;
+
+                match evaluated {
+                    Value::Return(val) => return Ok(*val),
+                    _ => return Ok(evaluated),
+                };
+            }
+            _ => Err(self.err_msg(format!("Not a function: {}", function))),
+        }
+    }
+
     fn eval_block_stmt(&mut self, block: Rc<[AST]>) -> Result<Value> {
         let mut result = Ok(Value::Nil);
+
         for stmt in block.iter() {
             result = self.eval(stmt.clone());
 
@@ -196,12 +282,13 @@ impl Evaluator {
             Type::String(str) => Value::String(str),
             Type::Number(num) => Value::Number(num),
             Type::Nil => Value::Nil,
-            Type::Ident(ident) => match self.env.get(ident.borrow()) {
-                Some(val) => val.clone(),
-                None => {
-                    return Err(self.err_msg(format!("reference error: '{}' not declared.", ident)))
+            Type::Ident(ident) => {
+                if let Some(val) = self.env.get(ident.borrow()) {
+                    return Ok(val.clone());
                 }
-            },
+
+                return Err(self.err_msg(format!("reference error: '{}' not declared.", ident)));
+            }
         };
 
         return Ok(evaluated);
@@ -221,9 +308,15 @@ pub enum Value {
     Return(Box<Value>),
     Idle,
     Nil,
+
+    Fn {
+        params: Rc<[Rc<str>]>,
+        body: Rc<[AST]>,
+        env: Env,
+    },
 }
 
-impl fmt::Display for Value {
+impl<'e> fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -234,9 +327,38 @@ impl fmt::Display for Value {
                 Value::String(val) => return write!(f, "{val}"),
                 Value::Number(val) => return write!(f, "{val}"),
                 Value::Return(value) => return write!(f, "{}", *value),
-                Value::Idle => "\0",
                 Value::Nil => "nil",
+                _ => "\0",
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+
+    use crate::parser::Parser;
+
+    use super::Evaluator;
+
+    #[test]
+    fn testy() -> Result<()> {
+        let input = r#"let addTwo = fn(x) { x + 2; }; 
+        addTwo(2)
+        "#
+        .to_string();
+
+        let ast = Parser::new(input).parse();
+        println!("inicio");
+        println!("{:?}", ast);
+        let result = Evaluator::new().eval(ast);
+
+        match result {
+            Ok(val) => println!("{}", val),
+            Err(err) => println!("Error: {}", err),
+        }
+
+        anyhow::Ok(())
     }
 }

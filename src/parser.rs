@@ -141,10 +141,10 @@ impl Parser {
                 self.expect_peek(Token::LParen);
                 to_return = AST::Call {
                     calle: Box::new(to_return),
-                    args: self.parse_params(),
+                    args: self.parse_args(),
                 };
                 self.expect_peek(Token::RParen);
-                to_return = AST::Expr(op, vec![to_return, AST::Type(Type::Nil)]);
+                to_return = AST::Expr(op, vec![to_return]);
 
                 continue;
             }
@@ -284,7 +284,28 @@ impl Parser {
         return AST::Fn { name, params, body };
     }
 
-    fn parse_params(&mut self) -> Rc<[AST]> {
+    fn parse_params(&mut self) -> Rc<[Rc<str>]> {
+        let mut params: Vec<Rc<str>> = Vec::new();
+
+        if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
+            match self.lexer.next() {
+                Some(Ok(Token::Ident(str))) => params.push(str),
+                _ => todo!(), // error
+            }
+        }
+
+        while matches!(self.lexer.peek(), Some(Ok(Token::Comma))) {
+            self.lexer.next(); // comsume comma
+            match self.lexer.next() {
+                Some(Ok(Token::Ident(str))) => params.push(str),
+                _ => todo!(), // error
+            }
+        }
+
+        return params.into();
+    }
+
+    fn parse_args(&mut self) -> Rc<[AST]> {
         let mut params: Vec<AST> = Vec::new();
 
         if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
@@ -292,7 +313,7 @@ impl Parser {
         }
 
         while matches!(self.lexer.peek(), Some(Ok(Token::Comma))) {
-            self.lexer.next();
+            self.lexer.next(); // comsume comma
             params.push(self.parse_expression(0));
         }
 
@@ -407,7 +428,7 @@ pub enum AST {
 
     Fn {
         name: Option<Rc<str>>,
-        params: Rc<[AST]>,
+        params: Rc<[Rc<str>]>,
         body: Rc<[AST]>,
     },
 
