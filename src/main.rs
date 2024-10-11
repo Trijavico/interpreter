@@ -1,6 +1,11 @@
 use std::{env, fs, process};
 
-use monkelang::{eval::Evaluator, lexer::Lexer, parser::Parser, repl};
+use monkelang::{
+    eval::{Env, Evaluator},
+    lexer::Lexer,
+    parser::Parser,
+    repl,
+};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -54,7 +59,12 @@ fn main() {
             });
 
             let mut parser = Parser::new(file_contents);
-            println!("{}", parser.parse());
+            for result in parser.parse() {
+                match result {
+                    Ok(ast) => println!("{ast}"),
+                    Err(err) => eprintln!("{err}"),
+                }
+            }
         }
         "eval" => {
             if args.len() < 3 {
@@ -68,7 +78,8 @@ fn main() {
             });
 
             let mut parser = Parser::new(file_contents);
-            let mut evaluator = Evaluator::new();
+            let mut evaluator = Evaluator::new(Env::new());
+
             let program = parser.parse();
 
             match evaluator.eval(program) {

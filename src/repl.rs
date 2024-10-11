@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::io::{self, Write};
 
 use crate::{
-    eval::{self, Evaluator},
+    eval::{self, Env, Evaluator},
     parser::Parser,
 };
 
@@ -11,7 +11,8 @@ pub fn start() -> Result<()> {
     let stdout = io::stdout();
     println!("Feel free to type in commands");
 
-    let mut evalator = Evaluator::new();
+    let env = Env::new();
+    let mut evalator = Evaluator::new(env);
 
     loop {
         print!(">>");

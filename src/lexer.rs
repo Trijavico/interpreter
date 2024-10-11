@@ -16,6 +16,8 @@ pub enum Token {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
 
     Bang,
     BangEqual,
@@ -56,6 +58,9 @@ impl fmt::Display for Token {
                 Token::RBrace => "RIGHT_BRACE } null",
                 Token::LParen => "LEFT_PAREN ( null",
                 Token::RParen => "RIGHT_PAREN ) null",
+                Token::LBracket => "LEFT_BRACKET [ null",
+                Token::RBracket => "RIGHT_BRACKET ] null",
+
                 Token::Dot => "DOT . null",
                 Token::Minus => "MINUS - null",
                 Token::Plus => "PLUS + null",
@@ -262,6 +267,9 @@ impl Iterator for Lexer {
             '}' => Token::RBrace,
             '(' => Token::LParen,
             ')' => Token::RParen,
+            '[' => Token::LBracket,
+            ']' => Token::RBracket,
+
             '.' => Token::Dot,
             ',' => Token::Comma,
             '-' => Token::Minus,
