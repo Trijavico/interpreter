@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use core::fmt;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -18,20 +18,15 @@ impl Env {
         };
     }
 
-    pub fn get(&self, name: &Rc<str>) -> Option<Value> {
+    pub fn get(&self, name: &Rc<str>) -> Result<Value> {
         if let Some(value) = self.store.borrow().get(name) {
-            return Some(value.clone());
+            return Ok(value.clone());
+        }
+        if let Some(env) = &self.outer {
+            return Ok(env.get(name)?);
         }
 
-        match &self.outer {
-            Some(env) => {
-                if let Some(value) = env.get(name) {
-                    return Some(value.clone());
-                }
-                None
-            }
-            None => None,
-        }
+        return Err(anyhow!("reference error: '{name}' not declared"));
     }
 
     pub fn set(&mut self, name: Rc<str>, obj: Value) {
@@ -74,6 +69,7 @@ impl Evaluator {
     fn eval_ast(&mut self, tree: AST) -> Result<Value> {
         let to_return = match tree {
             AST::Type(val) => self.eval_type(val)?,
+            AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
             AST::Print(val) => {
                 let evaluated = self.eval_ast(*val)?;
                 println!("{evaluated}");
@@ -83,18 +79,13 @@ impl Evaluator {
                 let to_return = self.eval_ast(*value)?;
                 Value::Return(Box::new(to_return))
             }
-            AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
 
             AST::Len(expr) => {
                 let evaluated = self.eval_ast(*expr)?;
                 match evaluated {
                     Value::String(str) => Value::Number(str.len() as f64),
-                    _ => {
-                        return Err(self.err_msg(format!(
-                            "type mistmach: Expected string, got: {}",
-                            evaluated
-                        )))
-                    }
+                    Value::Array(arr) => Value::Number(arr.borrow().len() as f64),
+                    _ => return Err(anyhow!("type mismatch: not an iterable type '{evaluated}'")),
                 }
             }
 
@@ -102,27 +93,6 @@ impl Evaluator {
                 let evaluated = self.eval_ast(*value)?;
                 self.env.set(ident, evaluated);
                 Value::Idle
-            }
-
-            AST::Reassign { ident, value } => {
-                let evaluated = self.eval_ast(*value)?;
-                let mut current_env = self.env.clone();
-                loop {
-                    if current_env.store.borrow().contains_key(&ident) {
-                        current_env.set(ident, evaluated);
-                        return Ok(Value::Idle);
-                    }
-
-                    if let Some(outer) = current_env.outer {
-                        current_env = *outer.clone();
-                    } else {
-                        break;
-                    }
-                }
-
-                return Err(
-                    self.err_msg(format!("Cannot reassign to undeclared variable: {}", ident))
-                );
             }
 
             AST::Fn { name, params, body } => {
@@ -149,40 +119,42 @@ impl Evaluator {
 
             AST::Call { calle, args } => {
                 let function = self.eval_ast(*calle)?;
-                let args = self.eval_args(args)?;
+                let mut result = Vec::new();
+                for item in args.iter() {
+                    result.push(self.eval_ast(item.clone())?);
+                }
 
-                return self.apply_fn(function, args);
+                return self.apply_fn(function, result);
             }
 
             AST::Expr(op, mut operands) => {
                 if operands.len() == 2 {
                     let right = self.eval_ast(operands.pop().unwrap())?;
-                    let left = self.eval_ast(operands.pop().unwrap())?;
+                    let left = self.eval_ast(operands.last().unwrap().clone())?;
 
-                    match (&left, &right) {
-                        (Value::Number(l_val), Value::Number(r_val)) => {
-                            return self.eval_infix_numbers(op, *l_val, *r_val);
-                        }
-                        (Value::String(left), Value::String(right)) => {
-                            if matches!(op, Op::Plus) {
-                                let string = format!("{}{}", left, right);
-                                return Ok(Value::String(string.into()));
-                            }
+                    match op {
+                        Op::Index => return self.eval_index(left, right),
+                        Op::And
+                        | Op::Or
+                        | Op::Greater
+                        | Op::GreaterEqual
+                        | Op::Less
+                        | Op::LessEqual
+                        | Op::AssignEqual => return self.eval_infix_booleans(op, left, right),
 
-                            return Err(
-                                self.err_msg(format!("invalid operator: {}{}{}", left, op, right))
-                            );
+                        Op::Plus | Op::Minus | Op::Star | Op::Slash => {
+                            return self.eval_infix_numbers(op, left, right)
                         }
-                        (Value::Bool(_), Value::Bool(_)) => {
-                            return self.eval_infix_booleans(
-                                op,
-                                self.is_truth(left),
-                                self.is_truth(right),
-                            );
+
+                        Op::ReAssign => {
+                            let left = match operands.pop().unwrap() {
+                                AST::Type(Type::Ident(ident)) => ident,
+                                ast => return Err(anyhow!("'{ast} not an indent'")),
+                            };
+
+                            return self.eval_reassign(left, right);
                         }
-                        _ => {
-                            return Err(self.err_msg(format!("type mismatch: {} {}", left, right)));
-                        }
+                        operation => panic!("shoul not error, got: {operation}"),
                     }
                 }
 
@@ -196,18 +168,18 @@ impl Evaluator {
                         if let Value::Number(num) = val {
                             return Ok(Value::Number(-1.0 * num));
                         }
-                        return Err(self.err_msg(format!("type mismatch: {}", val)));
+                        return Err(anyhow!("type mismatch: {val}"));
                     }
                     Op::Bang => {
                         let val = self.eval_ast(operands.pop().unwrap())?;
                         match val {
                             Value::Bool(val) => Value::Bool(!val),
                             Value::Nil => Value::Bool(true),
-                            _ => return Err(self.err_msg(format!("type mismatch: {}", val))),
+                            _ => return Err(anyhow!("type mismatch: {val}")),
                         }
                     }
 
-                    _ => return Err(self.err_msg(format!("unknown opreator: {}", op))),
+                    _ => return Err(anyhow!("unknown operator: {op}")),
                 }
             }
         };
@@ -215,10 +187,10 @@ impl Evaluator {
         return Ok(to_return);
     }
 
-    fn eval_args(&mut self, args: Rc<[AST]>) -> Result<Vec<Value>> {
+    fn eval_expressions(&mut self, arr: Vec<AST>) -> Result<Vec<Value>> {
         let mut result: Vec<Value> = Vec::new();
-        for arg in args.iter() {
-            let evaluated = self.eval_ast(arg.clone())?;
+        for item in arr.into_iter() {
+            let evaluated = self.eval_ast(item)?;
             result.push(evaluated);
         }
 
@@ -245,7 +217,7 @@ impl Evaluator {
                     _ => return Ok(evaluated),
                 };
             }
-            _ => Err(self.err_msg(format!("Not a function: {}", function))),
+            _ => Err(anyhow!("Not a function: {function}")),
         }
     }
 
@@ -254,11 +226,9 @@ impl Evaluator {
 
         for stmt in block.iter() {
             result = self.eval_ast(stmt.clone());
-
             if matches!(result, Err(_)) {
                 return result;
             }
-
             if matches!(result, Ok(Value::Return(_))) {
                 return result;
             }
@@ -267,16 +237,24 @@ impl Evaluator {
         return result;
     }
 
-    fn eval_infix_numbers(&self, op: Op, left: f64, right: f64) -> Result<Value> {
+    fn eval_infix_numbers(&self, op: Op, l_val: Value, r_val: Value) -> Result<Value> {
+        let left = match l_val {
+            Value::Number(num) => num,
+            value => return Err(anyhow!("type mismatch: '{value}'")),
+        };
+
+        let right = match r_val {
+            Value::Number(num) => num,
+            value => return Err(anyhow!("type mismatch: '{value}'")),
+        };
+
         let result = match op {
             Op::Plus => Value::Number(left + right),
             Op::Minus => Value::Number(left - right),
             Op::Star => Value::Number(left * right),
             Op::Slash => {
                 if right == 0.0 {
-                    return Err(
-                        self.err_msg(format!("unknown operator: {} {} {}", left, op, right))
-                    );
+                    return Err(anyhow!("unknown operator: {left} '{op}' {right}"));
                 }
                 Value::Number(left / right)
             }
@@ -286,19 +264,29 @@ impl Evaluator {
             Op::LessEqual => Value::Bool(left <= right),
             Op::AssignEqual => Value::Bool(left == right),
             Op::BangEqual => Value::Bool(left != right),
-            _ => return Err(self.err_msg(format!("unknown operator: {} {} {}", left, op, right))),
+            _ => return Err(anyhow!("unknown operator: {left} '{op}' {right}")),
         };
 
         return Ok(result);
     }
 
-    fn eval_infix_booleans(&self, op: Op, left: bool, right: bool) -> Result<Value> {
+    fn eval_infix_booleans(&self, op: Op, l_val: Value, r_val: Value) -> Result<Value> {
+        let left = match l_val {
+            Value::Bool(num) => num,
+            value => return Err(anyhow!("type mismatch: '{value}'")),
+        };
+
+        let right = match r_val {
+            Value::Bool(num) => num,
+            value => return Err(anyhow!("type mismatch: '{value}'")),
+        };
+
         let result = match op {
             Op::And => Value::Bool(left && right),
             Op::Or => Value::Bool(left || right),
             Op::AssignEqual => Value::Bool(left == right),
             Op::BangEqual => Value::Bool(left != right),
-            _ => return Err(self.err_msg(format!("unknown operator: {} {} {}", left, op, right))),
+            _ => return Err(anyhow!("unknown operator: {left} '{op}' {right}")),
         };
 
         return Ok(result);
@@ -323,32 +311,70 @@ impl Evaluator {
         }
     }
 
-    fn eval_type(&self, value: Type) -> Result<Value> {
+    fn eval_index(&mut self, arr: Value, num: Value) -> Result<Value> {
+        let index = match num {
+            Value::Number(n) => n as usize,
+            value => return Err(anyhow!("type mismatch: '{value}' not a number")),
+        };
+
+        match arr {
+            Value::Array(arr) => {
+                if index >= arr.borrow().len() {
+                    return Err(anyhow!("error: index out of bounds"));
+                }
+                Ok(arr.borrow()[index].clone())
+            }
+            Value::String(str) => {
+                if index >= str.len() {
+                    return Err(anyhow!("error: index out of bounds"));
+                }
+                let retorno = str.chars().nth(index).unwrap().to_string();
+
+                Ok(Value::String(retorno.into()))
+            }
+            value => Err(anyhow!("type mismatch: '{value}'")),
+        }
+    }
+
+    fn eval_reassign(&mut self, ident: Rc<str>, value: Value) -> Result<Value> {
+        let mut current_env = self.env.clone();
+        loop {
+            if current_env.store.borrow().contains_key(&ident) {
+                current_env.set(ident.clone(), value);
+                return Ok(Value::Idle);
+            }
+
+            if let Some(outer) = current_env.outer {
+                current_env = *outer.clone();
+            } else {
+                break;
+            }
+        }
+
+        return Err(anyhow!("reference error: '{ident}' not declared"));
+    }
+
+    fn eval_type(&mut self, value: Type) -> Result<Value> {
         let evaluated = match value {
             Type::Bool(bool) => Value::Bool(bool),
             Type::String(str) => Value::String(str),
             Type::Number(num) => Value::Number(num),
-            Type::Nil => Value::Nil,
-            Type::Ident(ident) => {
-                if let Some(val) = self.env.get(&ident) {
-                    return Ok(val);
-                }
-
-                return Err(self.err_msg(format!("reference error: '{}' not declared.", ident)));
+            Type::Arr(vec) => {
+                let list = RefCell::new(self.eval_expressions(*vec)?);
+                Value::Array(Rc::new(list))
             }
+            Type::Nil => Value::Nil,
+            Type::Ident(ident) => self.env.get(&ident)?,
         };
 
         return Ok(evaluated);
-    }
-
-    fn err_msg(&self, err_type: String) -> anyhow::Error {
-        return anyhow::Error::msg(err_type);
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Number(f64),
+    Array(Rc<RefCell<Vec<Value>>>),
     Ident(Rc<str>),
     String(Rc<str>),
     Bool(bool),
@@ -363,21 +389,27 @@ pub enum Value {
     },
 }
 
-impl<'e> fmt::Display for Value {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Value::Bool(val) => return write!(f, "{val}"),
-                Value::Ident(ident) => return write!(f, "{ident}"),
-                Value::String(val) => return write!(f, "{val}"),
-                Value::Number(val) => return write!(f, "{val}"),
-                Value::Return(value) => return write!(f, "{}", *value),
-                Value::Nil => "nil",
-                _ => "\0",
+        match self {
+            Value::Bool(val) => write!(f, "{val}"),
+            Value::Ident(ident) => write!(f, "{ident}"),
+            Value::String(val) => write!(f, "{val}"),
+            Value::Number(val) => write!(f, "{val}"),
+            Value::Return(value) => write!(f, "{}", *value),
+            Value::Nil => write!(f, "nil"),
+            Value::Array(arr) => {
+                write!(f, "[")?;
+                for (i, element) in arr.borrow().iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{element}")?;
+                }
+                write!(f, "]")
             }
-        )
+            _ => write!(f, "\0"),
+        }
     }
 }
 
