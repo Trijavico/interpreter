@@ -37,10 +37,11 @@ fn main() {
             let mut err = 0;
             for token in lexer {
                 match token {
-                    Ok(tok) => println!("{tok}"),
+                    Ok(tok) => println!("{}", tok.token),
                     Err(msg) => {
                         err = 65;
                         eprintln!("{}", msg);
+                        break;
                     }
                 };
             }
@@ -61,7 +62,7 @@ fn main() {
             let mut parser = Parser::new(file_contents);
             for result in parser.parse() {
                 match result {
-                    Ok(ast) => println!("{ast}"),
+                    Ok(ast) => println!("{:?}", ast),
                     Err(err) => eprintln!("{err}"),
                 }
             }

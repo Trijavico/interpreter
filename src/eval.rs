@@ -26,7 +26,7 @@ impl Env {
             return Ok(env.get(name)?);
         }
 
-        return Err(anyhow!("reference error: '{name}' not declared"));
+        return Err(anyhow!("Reference error: '{name}' not declared"));
     }
 
     pub fn set(&mut self, name: Rc<str>, obj: Value) {
@@ -80,15 +80,6 @@ impl Evaluator {
                 Value::Return(Box::new(to_return))
             }
 
-            AST::Len(expr) => {
-                let evaluated = self.eval_ast(*expr)?;
-                match evaluated {
-                    Value::String(str) => Value::Number(str.len() as f64),
-                    Value::Array(arr) => Value::Number(arr.borrow().len() as f64),
-                    _ => return Err(anyhow!("type mismatch: not an iterable type '{evaluated}'")),
-                }
-            }
-
             AST::Let { ident, value } => {
                 let evaluated = self.eval_ast(*value)?;
                 self.env.set(ident, evaluated);
@@ -130,31 +121,88 @@ impl Evaluator {
             AST::Expr(op, mut operands) => {
                 if operands.len() == 2 {
                     let right = self.eval_ast(operands.pop().unwrap())?;
-                    let left = self.eval_ast(operands.last().unwrap().clone())?;
 
                     match op {
-                        Op::Index => return self.eval_index(left, right),
-                        Op::And
-                        | Op::Or
+                        Op::And | Op::Or => {
+                            let left = self.eval_ast(operands.pop().unwrap())?;
+                            return self.eval_infix_booleans(op, left, right);
+                        }
+
+                        Op::Index => {
+                            let left = self.eval_ast(operands.pop().unwrap())?;
+                            return self.eval_index(left, right);
+                        }
+
+                        Op::AssignEqual => {
+                            let left = self.eval_ast(operands.pop().unwrap())?;
+                            if let (Value::Number(_), Value::Number(_)) = (&left, &right) {
+                                return self.eval_infix_numbers(op, left, right);
+                            }
+                            return self.eval_infix_booleans(op, left, right);
+                        }
+
+                        Op::Plus
+                        | Op::Minus
+                        | Op::Star
                         | Op::Greater
                         | Op::GreaterEqual
                         | Op::Less
                         | Op::LessEqual
-                        | Op::AssignEqual => return self.eval_infix_booleans(op, left, right),
+                        | Op::Slash => {
+                            let left = self.eval_ast(operands.pop().unwrap())?;
+                            return self.eval_infix_numbers(op, left, right);
+                        }
 
-                        Op::Plus | Op::Minus | Op::Star | Op::Slash => {
-                            return self.eval_infix_numbers(op, left, right)
+                        Op::Push => {
+                            let left = match operands.pop().unwrap() {
+                                AST::Type(Type::Ident(ident)) => ident,
+                                ast => {
+                                    return Err(anyhow!(
+                                        "[operation: PUSH] Error: '{ast}' not an IDENTIFIER"
+                                    ))
+                                }
+                            };
+                            let value = self.env.get(&left)?;
+                            match value {
+                                Value::Array(arr) => arr.borrow_mut().push(right),
+                                Value::String(arr) => {
+                                    if let Value::String(str) = right.clone() {
+                                        let mut string = arr.to_string();
+                                        if str.len() != 1 {
+                                            return Err(anyhow!(
+                                                "[operation: PUSH] Error: Argument to push must be a character, got '{right}'"
+                                            ));
+                                        }
+                                        string.push(str.chars().nth(0).unwrap() as char);
+                                        self.eval_reassign(left, Value::String(string.into()))?;
+                                    }
+                                    return Err(anyhow!(
+                                        "[operation: PUSH] Error: Argument to push must be a character, got '{right}'"
+                                    ));
+                                }
+                                val => {
+                                    return Err(anyhow!(
+                                        "[operation: PUSH] Type mismatch: '{val}' not iterable"
+                                    ))
+                                }
+                            };
+
+                            return Ok(Value::Idle);
                         }
 
                         Op::ReAssign => {
                             let left = match operands.pop().unwrap() {
                                 AST::Type(Type::Ident(ident)) => ident,
-                                ast => return Err(anyhow!("'{ast} not an indent'")),
+                                ast => {
+                                    return Err(anyhow!(
+                                        "[operation: {op} ] Error: '{ast}' not an IDENTIFIER"
+                                    ))
+                                }
                             };
 
                             return self.eval_reassign(left, right);
                         }
-                        operation => panic!("shoul not error, got: {operation}"),
+                        operation => panic!("shoul not error, got: '{operation}'"),
                     }
                 }
 
@@ -162,24 +210,100 @@ impl Evaluator {
                     Op::Grouped => self.eval_ast(operands.pop().unwrap())?,
                     Op::Assing => self.eval_ast(operands.pop().unwrap())?,
                     Op::Fn => self.eval_ast(operands.pop().unwrap())?,
-                    Op::Len => self.eval_ast(operands.pop().unwrap())?,
+
+                    Op::Rest => {
+                        let value = self.eval_ast(operands.pop().unwrap())?;
+                        match value {
+                            Value::String(str) => {
+                                if str.len() < 1 {
+                                    return Ok(Value::Nil);
+                                }
+                                let string = str.get(1..).unwrap().to_string();
+                                return Ok(Value::String(string.into()));
+                            }
+                            Value::Array(arr) => {
+                                if arr.borrow().len() < 1 {
+                                    return Ok(Value::Nil);
+                                }
+                                let new_arr: Vec<Value> = arr.borrow().get(1..).unwrap().into();
+                                return Ok(Value::Array(Rc::new(RefCell::new(new_arr))));
+                            }
+                            value => {
+                                return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'"))
+                            }
+                        }
+                    }
+
+                    Op::First => {
+                        let value = self.eval_ast(operands.pop().unwrap())?;
+                        if let Value::Array(arr) = value {
+                            if arr.borrow().len() == 0 {
+                                return Ok(Value::Nil);
+                            }
+                            return Ok(arr.borrow()[0].clone());
+                        }
+                        if let Value::String(arr) = value {
+                            if arr.len() == 0 {
+                                return Ok(Value::Nil);
+                            }
+                            return Ok(Value::String(
+                                arr.chars().nth(0).unwrap().to_string().into(),
+                            ));
+                        }
+
+                        return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'"));
+                    }
+
+                    Op::Last => {
+                        let value = self.eval_ast(operands.pop().unwrap())?;
+                        if let Value::Array(arr) = value {
+                            if arr.borrow().len() == 0 {
+                                return Ok(Value::Nil);
+                            }
+                            return Ok(arr.borrow().last().unwrap().clone());
+                        }
+                        if let Value::String(arr) = value {
+                            if arr.len() == 0 {
+                                return Ok(Value::Nil);
+                            }
+                            return Ok(Value::String(
+                                arr.chars().last().unwrap().to_string().into(),
+                            ));
+                        }
+
+                        return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'"));
+                    }
+
+                    Op::Len => {
+                        let value = self.eval_ast(operands.pop().unwrap())?;
+                        if let Value::Array(arr) = value {
+                            return Ok(Value::Number(arr.borrow().len() as f64));
+                        }
+                        if let Value::String(arr) = value {
+                            return Ok(Value::Number(arr.len() as f64));
+                        }
+
+                        return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'"));
+                    }
                     Op::Minus => {
                         let val = self.eval_ast(operands.pop().unwrap())?;
                         if let Value::Number(num) = val {
                             return Ok(Value::Number(-1.0 * num));
                         }
-                        return Err(anyhow!("type mismatch: {val}"));
+                        return Err(anyhow!("[operation: {op} ] Type mismatch: '{val}'"));
                     }
                     Op::Bang => {
                         let val = self.eval_ast(operands.pop().unwrap())?;
                         match val {
                             Value::Bool(val) => Value::Bool(!val),
                             Value::Nil => Value::Bool(true),
-                            _ => return Err(anyhow!("type mismatch: {val}")),
+                            value => {
+                                return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'"))
+                            }
                         }
                     }
 
-                    _ => return Err(anyhow!("unknown operator: {op}")),
+                    _ => return Err(anyhow!("Unknown operator: {op}")),
                 }
             }
         };
@@ -217,7 +341,9 @@ impl Evaluator {
                     _ => return Ok(evaluated),
                 };
             }
-            _ => Err(anyhow!("Not a function: {function}")),
+            _ => Err(anyhow!(
+                "[operation: FUNCTION CALL] Error: not a function '{function}'"
+            )),
         }
     }
 
@@ -240,12 +366,12 @@ impl Evaluator {
     fn eval_infix_numbers(&self, op: Op, l_val: Value, r_val: Value) -> Result<Value> {
         let left = match l_val {
             Value::Number(num) => num,
-            value => return Err(anyhow!("type mismatch: '{value}'")),
+            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
         };
 
         let right = match r_val {
             Value::Number(num) => num,
-            value => return Err(anyhow!("type mismatch: '{value}'")),
+            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
         };
 
         let result = match op {
@@ -254,7 +380,7 @@ impl Evaluator {
             Op::Star => Value::Number(left * right),
             Op::Slash => {
                 if right == 0.0 {
-                    return Err(anyhow!("unknown operator: {left} '{op}' {right}"));
+                    return Err(anyhow!("Dividing by zero error: {left} '{op}' {right}"));
                 }
                 Value::Number(left / right)
             }
@@ -264,7 +390,7 @@ impl Evaluator {
             Op::LessEqual => Value::Bool(left <= right),
             Op::AssignEqual => Value::Bool(left == right),
             Op::BangEqual => Value::Bool(left != right),
-            _ => return Err(anyhow!("unknown operator: {left} '{op}' {right}")),
+            _ => return Err(anyhow!("Unknown operator: {left} '{op}' {right}")),
         };
 
         return Ok(result);
@@ -273,12 +399,12 @@ impl Evaluator {
     fn eval_infix_booleans(&self, op: Op, l_val: Value, r_val: Value) -> Result<Value> {
         let left = match l_val {
             Value::Bool(num) => num,
-            value => return Err(anyhow!("type mismatch: '{value}'")),
+            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
         };
 
         let right = match r_val {
             Value::Bool(num) => num,
-            value => return Err(anyhow!("type mismatch: '{value}'")),
+            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
         };
 
         let result = match op {
@@ -286,7 +412,7 @@ impl Evaluator {
             Op::Or => Value::Bool(left || right),
             Op::AssignEqual => Value::Bool(left == right),
             Op::BangEqual => Value::Bool(left != right),
-            _ => return Err(anyhow!("unknown operator: {left} '{op}' {right}")),
+            _ => return Err(anyhow!("Unknown operator: {left} '{op}' {right}")),
         };
 
         return Ok(result);
@@ -314,25 +440,31 @@ impl Evaluator {
     fn eval_index(&mut self, arr: Value, num: Value) -> Result<Value> {
         let index = match num {
             Value::Number(n) => n as usize,
-            value => return Err(anyhow!("type mismatch: '{value}' not a number")),
+            value => {
+                return Err(anyhow!(
+                    "[operation: INDEX] Type mismatch: '{value}' not a number"
+                ))
+            }
         };
 
         match arr {
             Value::Array(arr) => {
                 if index >= arr.borrow().len() {
-                    return Err(anyhow!("error: index out of bounds"));
+                    return Err(anyhow!("[operation: INDEX] Error: index out of bounds"));
                 }
                 Ok(arr.borrow()[index].clone())
             }
             Value::String(str) => {
                 if index >= str.len() {
-                    return Err(anyhow!("error: index out of bounds"));
+                    return Err(anyhow!("[operation: INDEX] Error: index out of bounds"));
                 }
                 let retorno = str.chars().nth(index).unwrap().to_string();
 
                 Ok(Value::String(retorno.into()))
             }
-            value => Err(anyhow!("type mismatch: '{value}'")),
+            value => Err(anyhow!(
+                "[operation: INDEX] Type mismatch: '{value}' not iterable"
+            )),
         }
     }
 
@@ -351,7 +483,7 @@ impl Evaluator {
             }
         }
 
-        return Err(anyhow!("reference error: '{ident}' not declared"));
+        return Err(anyhow!("Reference error: '{ident}' not declared"));
     }
 
     fn eval_type(&mut self, value: Type) -> Result<Value> {

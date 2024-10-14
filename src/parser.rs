@@ -3,7 +3,7 @@ use std::{iter::Peekable, rc::Rc};
 
 use anyhow::{anyhow, Result};
 
-use crate::lexer::{Lexer, Token};
+use crate::lexer::{Lexer, Token, TokenKind};
 
 pub struct Parser {
     lexer: Peekable<Lexer>,
@@ -20,17 +20,24 @@ impl Parser {
         return self.parse_statement();
     }
 
+    fn is_next_token(&mut self, expected: Token) -> bool {
+        match self.lexer.peek() {
+            Some(Ok(TokenKind { token, .. })) => *token == expected,
+            _ => false,
+        }
+    }
+
     fn expect_peek(&mut self, tok: Token) -> Result<()> {
         let error = match self.lexer.peek() {
             Some(Ok(next)) => {
-                if *next == tok {
+                if next.token == tok {
                     self.lexer.next();
                     return Ok(());
                 }
-                Err(anyhow!("expected {tok}"))
+                Err(anyhow!("[line: {}] Error: expected {tok}", next.line))
             }
-            Some(Err(err)) => Err(anyhow!("{:?}", err)),
-            None => return Err(anyhow!("expected {tok}")),
+            Some(Err(err)) => Err(anyhow!("{err}")),
+            None => return Err(anyhow!("[End of line ] Error: expected {tok}",)),
         };
 
         return error;
@@ -40,25 +47,37 @@ impl Parser {
         let mut statements: Vec<Result<AST>> = Vec::new();
 
         while let Some(tok_result) = self.lexer.peek() {
-            let token = match tok_result {
-                Ok(Token::Fn) => self.parse_fun(),
-                Ok(Token::Return) => self.parse_return(),
-                Ok(Token::If) => self.parse_if(),
-                Ok(Token::Print) => self.parse_print(),
-                Ok(Token::Let) => self.parse_let(),
-                Ok(Token::EOF) => break,
+            let token_kind = match tok_result {
+                Ok(token) => token,
+                Err(err) => {
+                    statements.push(Err(anyhow!("{err}")));
+                    println!("{:?}", self.lexer.next());
+                    continue;
+                }
+            };
 
-                Ok(Token::LParen)
-                | Ok(Token::LBracket)
-                | Ok(Token::Number(_, _))
-                | Ok(Token::String(_))
-                | Ok(Token::Ident(_))
-                | Ok(Token::Bang)
-                | Ok(Token::Minus)
-                | Ok(Token::True)
-                | Ok(Token::Len)
-                | Ok(Token::False) => self.parse_expression_statements(),
-                Err(err) => Err(anyhow!("{:?}", err)),
+            let token = match token_kind.token {
+                Token::Fn => self.parse_fun(),
+                Token::Return => self.parse_return(),
+                Token::If => self.parse_if(),
+                Token::Print => self.parse_print(),
+                Token::Let => self.parse_let(),
+                Token::EOF => break,
+
+                Token::LParen
+                | Token::LBracket
+                | Token::Number(_, _)
+                | Token::String(_)
+                | Token::Ident(_)
+                | Token::Bang
+                | Token::Minus
+                | Token::True
+                | Token::Len
+                | Token::First
+                | Token::Last
+                | Token::Rest
+                | Token::Push
+                | Token::False => self.parse_expression_statements(),
                 _ => break,
             };
 
@@ -75,7 +94,7 @@ impl Parser {
             None => return Ok(AST::Type(Type::Nil)),
         };
 
-        let mut to_return = match l_side {
+        let mut to_return = match l_side.token {
             Token::String(val) => AST::Type(Type::String(val)),
             Token::Number(_, num) => AST::Type(Type::Number(num)),
             Token::True => AST::Type(Type::Bool(true)),
@@ -88,7 +107,7 @@ impl Parser {
 
             Token::Assign | Token::LParen => {
                 let r_side = self.parse_expression(0)?;
-                if matches!(l_side, Token::LParen) {
+                if matches!(l_side.token, Token::LParen) {
                     self.expect_peek(Token::RParen)?;
                     AST::Expr(Op::Grouped, vec![r_side])
                 } else {
@@ -100,12 +119,42 @@ impl Parser {
                 self.expect_peek(Token::LParen)?;
                 let right = self.parse_expression(0)?;
                 self.expect_peek(Token::RParen)?;
+                AST::Expr(Op::Len, vec![right])
+            }
 
-                AST::Expr(Op::Len, vec![AST::Len(Box::new(right))])
+            Token::Push => {
+                self.expect_peek(Token::LParen)?;
+                let left = self.parse_expression(0)?;
+                self.expect_peek(Token::Comma)?;
+                let right = self.parse_expression(0)?;
+                self.expect_peek(Token::RParen)?;
+                self.expect_peek(Token::Semicolon)?;
+                return Ok(AST::Expr(Op::Push, vec![left, right]));
+            }
+
+            Token::First => {
+                self.expect_peek(Token::LParen)?;
+                let right = self.parse_expression(0)?;
+                self.expect_peek(Token::RParen)?;
+                AST::Expr(Op::First, vec![right])
+            }
+
+            Token::Last => {
+                self.expect_peek(Token::LParen)?;
+                let right = self.parse_expression(0)?;
+                self.expect_peek(Token::RParen)?;
+                AST::Expr(Op::Last, vec![right])
+            }
+
+            Token::Rest => {
+                self.expect_peek(Token::LParen)?;
+                let right = self.parse_expression(0)?;
+                self.expect_peek(Token::RParen)?;
+                AST::Expr(Op::Rest, vec![right])
             }
 
             Token::Bang | Token::Minus => {
-                let op = match l_side {
+                let op = match l_side.token {
                     Token::Bang => Op::Bang,
                     Token::Minus => Op::Minus,
                     _ => return Ok(AST::Type(Type::Nil)),
@@ -116,19 +165,21 @@ impl Parser {
                 AST::Expr(op, vec![r_side])
             }
 
-            _ => return Err(anyhow!("expected an expression")),
+            _ => {
+                return Err(anyhow!(
+                    "[line {}] Error: Expected an EXPRESSION",
+                    l_side.line
+                ))
+            }
         };
 
         loop {
             let tok = match self.lexer.peek() {
                 Some(Ok(tok)) => tok,
-                Some(Err(err)) => panic!("err: {}", err),
-                None => {
-                    break;
-                }
+                _ => break,
             };
 
-            let op = match tok {
+            let op = match tok.token {
                 Token::Plus => Op::Plus,
                 Token::Assign => Op::ReAssign,
                 Token::Minus => Op::Minus,
@@ -217,12 +268,14 @@ impl Parser {
     fn infix_binding_power(&self, op: Op) -> Option<(u8, u8)> {
         let binding_power = match op {
             Op::And | Op::Or => (3, 4),
+
             Op::BangEqual
             | Op::AssignEqual
             | Op::Less
             | Op::LessEqual
             | Op::Greater
             | Op::GreaterEqual => (5, 6),
+
             Op::Plus | Op::Minus => (7, 8),
             Op::Star | Op::Slash => (9, 10),
             _ => return None,
@@ -232,19 +285,27 @@ impl Parser {
     }
 
     fn parse_let(&mut self) -> Result<AST> {
-        if matches!(self.lexer.peek(), Some(Ok(Token::Let))) {
+        if self.is_next_token(Token::Let) {
             self.lexer.next();
         }
 
-        let ident = match self.lexer.next() {
-            Some(Ok(Token::Ident(val))) => val,
+        let token = match self.lexer.next() {
+            Some(Ok(token)) => token,
             Some(Err(err)) => return Err(err),
-            _ => return Err(anyhow!("Expected an indentifier")),
+            _ => return Err(anyhow!("[End of line] Error: Expected an IDENTIFIER")),
+        };
+
+        let ident = match token.token {
+            Token::Ident(ident) => ident,
+            _ => return Err(anyhow!("[line: {}] Error: Expected IDENTIFIER", token.line)),
         };
 
         let value = match self.lexer.peek() {
-            Some(Ok(Token::Assign)) => self.parse_expression(0)?,
-            Some(Err(err)) => panic!("Error: {}", err),
+            Some(Ok(TokenKind {
+                token: Token::Assign,
+                ..
+            })) => self.parse_expression(0)?,
+            Some(Err(err)) => panic!("{err}"),
             _ => AST::Type(Type::Nil),
         };
 
@@ -267,7 +328,7 @@ impl Parser {
     }
 
     fn parse_if(&mut self) -> Result<AST> {
-        if matches!(self.lexer.peek(), Some(Ok(Token::If))) {
+        if self.is_next_token(Token::If) {
             self.lexer.next();
         }
         let condition = self.parse_expression(0)?;
@@ -277,7 +338,9 @@ impl Parser {
         self.expect_peek(Token::RBrace)?;
 
         let no = match self.lexer.peek() {
-            Some(Ok(Token::Else)) => {
+            Some(Ok(TokenKind {
+                token: Token::Else, ..
+            })) => {
                 self.lexer.next();
                 self.expect_peek(Token::LBrace)?;
                 let no = self.parse_block()?;
@@ -307,18 +370,24 @@ impl Parser {
     }
 
     fn parse_fun(&mut self) -> Result<AST> {
-        if matches!(self.lexer.peek(), Some(Ok(Token::Fn))) {
+        if self.is_next_token(Token::Fn) {
             self.lexer.next();
         }
-        let name = if let Some(Ok(Token::Ident(val))) = self.lexer.peek() {
+
+        let name = if let Some(Ok(TokenKind {
+            token: Token::Ident(val),
+            ..
+        })) = self.lexer.peek()
+        {
             let name = val.clone();
             self.lexer.next();
             Some(name)
         } else {
             None
         };
+
         self.expect_peek(Token::LParen)?;
-        let params = self.parse_params();
+        let params = self.parse_params()?;
         self.expect_peek(Token::RParen)?;
 
         self.expect_peek(Token::LBrace)?;
@@ -328,35 +397,46 @@ impl Parser {
         return Ok(AST::Fn { name, params, body });
     }
 
-    fn parse_params(&mut self) -> Rc<[Rc<str>]> {
+    fn parse_params(&mut self) -> Result<Rc<[Rc<str>]>> {
         let mut params: Vec<Rc<str>> = Vec::new();
+        if !self.is_next_token(Token::RParen) {
+            let token = match self.lexer.next() {
+                Some(Ok(token)) => token,
+                Some(Err(err)) => return Err(anyhow!("{err}")),
+                None => return Err(anyhow!("[End of line] Error: Expected IDENTIFIER")),
+            };
 
-        if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
-            match self.lexer.next() {
-                Some(Ok(Token::Ident(str))) => params.push(str),
-                _ => todo!(), // error
+            match token.token {
+                Token::Ident(ident) => params.push(ident),
+                _ => return Err(anyhow!("[line: {}] Error: Expected IDENTIFIER", token.line)),
             }
         }
 
-        while matches!(self.lexer.peek(), Some(Ok(Token::Comma))) {
+        while self.is_next_token(Token::Comma) {
             self.lexer.next(); // comsume comma
-            match self.lexer.next() {
-                Some(Ok(Token::Ident(str))) => params.push(str),
-                _ => todo!(), // error
+            let token = match self.lexer.next() {
+                Some(Ok(token)) => token,
+                Some(Err(err)) => return Err(anyhow!("{err}")),
+                None => return Err(anyhow!("[End of line] Error: Expected IDENTIFIER")),
+            };
+
+            match token.token {
+                Token::Ident(ident) => params.push(ident),
+                _ => return Err(anyhow!("[line: {}] Error: Expected IDENTIFIER", token.line)),
             }
         }
 
-        return params.into();
+        return Ok(params.into());
     }
 
     fn parse_args(&mut self) -> Result<Rc<[AST]>> {
         let mut params: Vec<AST> = Vec::new();
 
-        if !matches!(self.lexer.peek(), Some(Ok(Token::RParen))) {
+        if !self.is_next_token(Token::RParen) {
             params.push(self.parse_expression(0)?);
         }
 
-        while matches!(self.lexer.peek(), Some(Ok(Token::Comma))) {
+        while self.is_next_token(Token::Comma) {
             self.lexer.next(); // comsume comma
             params.push(self.parse_expression(0)?);
         }
@@ -379,7 +459,7 @@ impl Parser {
 
     fn parse_expression_statements(&mut self) -> Result<AST> {
         let expr = self.parse_expression(0)?;
-        if matches!(self.lexer.peek(), Some(Ok(Token::Semicolon))) {
+        if self.is_next_token(Token::Semicolon) {
             self.lexer.next();
         }
         return Ok(expr);
@@ -388,14 +468,20 @@ impl Parser {
     fn parse_array(&mut self) -> Result<AST> {
         let mut vector = Vec::new();
         loop {
-            if matches!(self.lexer.peek(), Some(Ok(Token::RBracket))) {
+            if self.is_next_token(Token::RBracket) {
                 self.lexer.next();
                 break;
             }
             vector.push(self.parse_expression(0)?);
             match self.lexer.peek() {
-                Some(Ok(Token::RBracket)) => continue,
-                Some(Ok(Token::Comma)) => self.lexer.next(),
+                Some(Ok(TokenKind {
+                    token: Token::RBracket,
+                    ..
+                })) => continue,
+                Some(Ok(TokenKind {
+                    token: Token::Comma,
+                    ..
+                })) => self.lexer.next(),
                 _ => return Err(anyhow!("expected ',' or ']' in array literal")),
             };
         }
@@ -422,9 +508,13 @@ pub enum Op {
     AssignEqual,
     Or,
     And,
-    Len,
     Index,
     ReAssign,
+    Len,
+    First,
+    Last,
+    Push,
+    Rest,
 }
 
 impl fmt::Display for Op {
@@ -452,6 +542,10 @@ impl fmt::Display for Op {
                 Op::Grouped => "group",
                 Op::Len => "len",
                 Op::Index => "index",
+                Op::First => "First",
+                Op::Last => "Last",
+                Op::Push => "Push",
+                Op::Rest => "Rest",
             }
         )
     }
@@ -511,8 +605,6 @@ pub enum AST {
         value: Box<AST>, // Expr
     },
 
-    Len(Box<AST>),
-
     Fn {
         name: Option<Rc<str>>,
         params: Rc<[Rc<str>]>,
@@ -540,7 +632,6 @@ impl fmt::Display for AST {
         match self {
             AST::Type(i) => write!(f, "{}", i),
             AST::Print(i) => write!(f, "{}", i),
-            AST::Len(expr) => write!(f, "{expr}"),
             AST::Expr(head, rest) => {
                 write!(f, "({}", head)?;
                 for s in rest {
@@ -716,10 +807,7 @@ mod tests {
     #[test]
     fn len_expr() -> Result<()> {
         let input = "len(\"hello\");";
-        let expected = AST::Expr(
-            Op::Len,
-            vec![AST::Len(Box::new(AST::Type(Type::String("hello".into()))))],
-        );
+        let expected = AST::Expr(Op::Len, vec![AST::Type(Type::String("hello".into()))]);
 
         let mut parser = Parser::new(input.to_string());
         let statements = parser.parse();

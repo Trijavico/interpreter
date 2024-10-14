@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use core::fmt;
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Comma,
     Dot,
@@ -44,6 +44,10 @@ pub enum Token {
     Len,
     If,
     Nil,
+    Push,
+    First,
+    Last,
+    Rest,
 
     EOF,
 }
@@ -54,44 +58,48 @@ impl fmt::Display for Token {
             f,
             "{}",
             match self {
-                Token::LBrace => "LEFT_BRACE { null",
-                Token::RBrace => "RIGHT_BRACE } null",
-                Token::LParen => "LEFT_PAREN ( null",
-                Token::RParen => "RIGHT_PAREN ) null",
-                Token::LBracket => "LEFT_BRACKET [ null",
-                Token::RBracket => "RIGHT_BRACKET ] null",
+                Token::LBrace => "LEFT_BRACE {",
+                Token::RBrace => "RIGHT_BRACE }",
+                Token::LParen => "LEFT_PAREN (",
+                Token::RParen => "RIGHT_PAREN )",
+                Token::LBracket => "LEFT_BRACKET [",
+                Token::RBracket => "RIGHT_BRACKET ]",
 
-                Token::Dot => "DOT . null",
-                Token::Minus => "MINUS - null",
-                Token::Plus => "PLUS + null",
-                Token::Star => "STAR * null",
-                Token::Semicolon => "SEMICOLON ; null",
-                Token::Colon => "COLON : null",
-                Token::Comma => "COMMA , null",
-                Token::Bang => "BANG ! null",
-                Token::BangEqual => "BANG_EQUAL != null",
-                Token::Assign => "EQUAL = null",
-                Token::AssignEqual => "EQUAL_EQUAL == null",
-                Token::Greater => "GREATER > null",
-                Token::GreaterEqual => "GREATER_EQUAL >= null",
-                Token::Less => "LESS < null",
-                Token::LessEqual => "LESS_EQUAL <= null",
-                Token::Slash => "SLASH / null",
+                Token::Dot => "DOT .",
+                Token::Minus => "MINUS -",
+                Token::Plus => "PLUS +",
+                Token::Star => "STAR *",
+                Token::Semicolon => "SEMICOLON ;",
+                Token::Colon => "COLON :",
+                Token::Comma => "COMMA ,",
+                Token::Bang => "BANG !",
+                Token::BangEqual => "BANG_EQUAL !=",
+                Token::Assign => "EQUAL =",
+                Token::AssignEqual => "EQUAL_EQUAL ==",
+                Token::Greater => "GREATER >",
+                Token::GreaterEqual => "GREATER_EQUAL >=",
+                Token::Less => "LESS <",
+                Token::LessEqual => "LESS_EQUAL <=",
+                Token::Slash => "SLASH /",
 
-                Token::And => "AND and null",
-                Token::Or => "OR or null",
-                Token::False => "FALSE false null",
-                Token::True => "TRUE true null",
-                Token::If => "IF if null",
-                Token::Else => "ELSE else null",
-                Token::Print => "PRINT print null",
-                Token::Let => "LET let null",
-                Token::Fn => "FN fun null",
-                Token::Nil => "NIL nil null",
-                Token::Len => "LEN len null",
-                Token::Return => "RETURN return null",
+                Token::And => "AND and",
+                Token::Or => "OR or",
+                Token::False => "FALSE false",
+                Token::True => "TRUE true",
+                Token::If => "IF if",
+                Token::Else => "ELSE else",
+                Token::Print => "PRINT print",
+                Token::Let => "LET let",
+                Token::Fn => "FN fun",
+                Token::Nil => "NIL nil",
+                Token::Len => "LEN len",
+                Token::Return => "RETURN return",
+                Token::Push => "PUSH push",
+                Token::First => "FIRST first",
+                Token::Last => "LAST last",
+                Token::Rest => "REST rest",
 
-                Token::Ident(val) => return write!(f, "IDENTIFIER {val} null"),
+                Token::Ident(val) => return write!(f, "IDENTIFIER {val}"),
                 Token::String(val) => return write!(f, "STRING \"{val}\" {val}"),
                 Token::Number(lit, num) => {
                     if *num == num.trunc() {
@@ -101,10 +109,16 @@ impl fmt::Display for Token {
                     }
                 }
 
-                Token::EOF => "EOF  null",
+                Token::EOF => "EOF ",
             }
         )
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenKind {
+    pub token: Token,
+    pub line: usize,
 }
 
 pub struct Lexer {
@@ -140,6 +154,10 @@ impl Lexer {
         self.current_pos = self.next_pos;
         self.next_pos += 1;
         self.char = self.input.as_bytes()[self.current_pos] as char;
+
+        if self.char == '\n' && self.current_pos != self.input.len() - 1 {
+            self.line += 1;
+        }
     }
 
     fn peek(&mut self) -> char {
@@ -162,10 +180,6 @@ impl Lexer {
             }
 
             self.next_char();
-
-            if self.char == '\n' {
-                self.line += 1;
-            }
         }
     }
 
@@ -188,7 +202,7 @@ impl Lexer {
         return no;
     }
 
-    fn read_string(&mut self) -> Option<Result<Token>> {
+    fn read_string(&mut self) -> Option<Result<TokenKind>> {
         let start_pos = self.current_pos + 1;
         while self.peek() != '"' && self.peek() != '\0' {
             self.next_char();
@@ -205,24 +219,30 @@ impl Lexer {
 
         if start_pos == self.current_pos + 1 {
             let str: Rc<str> = self.input[start_pos..start_pos].into();
-            return Some(Ok(Token::String(str)));
+            return Some(Ok(TokenKind {
+                token: Token::String(str),
+                line: self.line,
+            }));
         }
 
         let str: Rc<str> = self.input[start_pos..=self.current_pos].into();
-        return Some(Ok(Token::String(str)));
+        return Some(Ok(TokenKind {
+            token: Token::String(str),
+            line: self.line,
+        }));
     }
 
     fn read_number(&mut self) -> Rc<str> {
         let start_pos = self.current_pos;
 
-        while self.peek().is_ascii_digit() && self.peek() != '\0' {
+        while self.peek().is_ascii_digit() {
             self.next_char();
         }
 
         if self.peek() == '.' {
             self.next_char();
             if self.peek().is_ascii_digit() {
-                while self.peek().is_ascii_digit() && self.peek() != '\0' {
+                while self.peek().is_ascii_digit() {
                     self.next_char();
                 }
             }
@@ -247,13 +267,17 @@ impl Lexer {
             "nil" => Token::Nil,
             "print" => Token::Print,
             "len" => Token::Len,
+            "push" => Token::Push,
+            "first" => Token::First,
+            "last" => Token::Last,
+            "rest" => Token::Rest,
             _ => Token::Ident(literal.into()),
         };
     }
 }
 
 impl Iterator for Lexer {
-    type Item = Result<Token>;
+    type Item = Result<TokenKind>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current_pos > self.input.len() {
@@ -262,7 +286,7 @@ impl Iterator for Lexer {
 
         self.skip_whitespace();
 
-        let tok = match self.char {
+        let token = match self.char {
             '{' => Token::LBrace,
             '}' => Token::RBrace,
             '(' => Token::LParen,
@@ -309,16 +333,22 @@ impl Iterator for Lexer {
             '\0' => Token::EOF,
 
             _ => {
-                return Some(Err(anyhow::Error::msg(format!(
+                let error = Some(Err(anyhow!(
                     "[line: {}] Error: Unexpected character: {}",
-                    self.line, self.char
-                ))))
+                    self.line,
+                    self.char
+                )));
+                self.next_char();
+                return error;
             }
         };
 
         self.next_char();
 
-        return Some(Ok(tok));
+        return Some(Ok(TokenKind {
+            token,
+            line: self.line,
+        }));
     }
 }
 
@@ -355,7 +385,7 @@ mod test {
             };
 
             assert_eq!(
-                expected[i], tok,
+                expected[i], tok.token,
                 "expected: {:?}, got: {:?}",
                 expected[i], tok
             );
@@ -385,7 +415,7 @@ mod test {
             };
 
             assert_eq!(
-                expected[i], tok,
+                expected[i], tok.token,
                 "expected: {:?}, got: {:?}",
                 expected[i], tok
             );
@@ -421,7 +451,7 @@ mod test {
             };
 
             assert_eq!(
-                expected[i], tok,
+                expected[i], tok.token,
                 "expected: {:?}, got: {:?}",
                 expected[i], tok
             );
@@ -457,7 +487,7 @@ mod test {
             };
 
             assert_eq!(
-                expected[i], tok,
+                expected[i], tok.token,
                 "expected: {:?}, got: {:?}",
                 expected[i], tok
             );
@@ -501,7 +531,7 @@ mod test {
             };
 
             assert_eq!(
-                expected[i], tok,
+                expected[i], tok.token,
                 "expected: {:?}, got: {:?}",
                 expected[i], tok
             );
