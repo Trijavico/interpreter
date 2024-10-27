@@ -1,7 +1,8 @@
 # Monkey Language Interpreter
-This is an interpreter for the **MonkeyLanguage** language, implemented in **Rust**, based on the language described by **Thorsten Ball** in his book *"Writing An Interpreter In Go"*.
 
-## Summary
+This project is a Rust implementation of the interpreter for the **MonkeyLang** programming language, originally designed by **Thorsten Ball**. The interpreter includes a command-line interface (CLI) with multiple functionalities.
+
+## Language features
 - Variable bindings
 - Integers and booleans
 - A string data structure
@@ -11,6 +12,33 @@ This is an interpreter for the **MonkeyLanguage** language, implemented in **Rus
 - First-class and higher-order functions • closures
 
 ## Usage 
+Make sure you compile the rust code:
+```
+cargo build --bin main --realease
+```
+
+### Commands
+
+**Tokenization**
+```
+monkeylang tokenize <file>
+```
+**Parsing**
+The parsing will print out 
+```
+monkeylang parse <file>
+```
+**Evaluation**
+```
+monkeylang eval <file>
+```
+**REPL (Read-Eval-Print Loop)**
+```
+monkeylang repl
+```
+
+### Variable bindings
+
 Once the interpreter is running, you can start writing Monkey Language code directly in the interactive console. Some usage examples:
 ```
 >> let x = 5;
@@ -27,9 +55,8 @@ Once the interpreter is running, you can start writing Monkey Language code dire
 3
 ```
 
-## Additional features
-
 ### Control flow structures
+
 Monkey Language supports `if` and `else` statements:
 ```
 if x > y {
@@ -46,6 +73,7 @@ let isNil = if nil {
 ```
 
 ### Higher-order functions
+
 You can pass functions as arguments and return them as results:
 ```
 let twice = fn(f, x) {
