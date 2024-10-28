@@ -14,7 +14,7 @@ This project is a Rust implementation of the interpreter for the **MonkeyLang** 
 ## Usage 
 Make sure you compile the rust code:
 ```
-cargo build --bin main --realease
+cargo build --realease
 ```
 
 ### Commands
