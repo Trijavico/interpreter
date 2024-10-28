@@ -1,6 +1,6 @@
 # Monkey Language Interpreter
 
-This project is a Rust implementation of the interpreter for the **MonkeyLang** programming language, originally designed by **Thorsten Ball**. The interpreter includes a command-line interface (CLI) with multiple functionalities.
+This project is a Rust implementation of the interpreter for the **monkelang** programming language, originally designed by **Thorsten Ball**. The interpreter includes a command-line interface (CLI) with multiple functionalities.
 
 ## Language features
 - Variable bindings
@@ -21,20 +21,20 @@ cargo build --realease
 
 **Tokenization**
 ```
-monkeylang tokenize <file>
+monkelang tokenize <file>
 ```
 **Parsing**
 The parsing will print out 
 ```
-monkeylang parse <file>
+monkelang parse <file>
 ```
 **Evaluation**
 ```
-monkeylang eval <file>
+monkelang eval <file>
 ```
 **REPL (Read-Eval-Print Loop)**
 ```
-monkeylang repl
+monkelang repl
 ```
 ## Examples
 
