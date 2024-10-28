@@ -36,6 +36,7 @@ monkeylang eval <file>
 ```
 monkeylang repl
 ```
+## Examples
 
 ### Variable bindings
 
