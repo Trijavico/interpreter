@@ -1,4 +1,4 @@
-use std::{env, fs, process};
+use std::{env, fs, io, process};
 
 use monkelang::{
     eval::{Env, Evaluator},
@@ -79,7 +79,7 @@ fn main() {
             });
 
             let mut parser = Parser::new(file_contents);
-            let mut evaluator = Evaluator::new(Env::new());
+            let mut evaluator = Evaluator::new(Env::new(), io::stdout(), io::stderr());
 
             let program = parser.parse();
 

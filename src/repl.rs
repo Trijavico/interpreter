@@ -12,7 +12,7 @@ pub fn start() -> Result<()> {
     println!("Feel free to type in commands");
 
     let env = Env::new();
-    let mut evalator = Evaluator::new(env);
+    let mut evalator = Evaluator::new(env, io::stdout(), io::stderr());
 
     loop {
         print!(">>");

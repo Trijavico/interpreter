@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use core::fmt;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, io::Write, rc::Rc};
 
 use crate::parser::{Op, Type, AST};
 
@@ -34,13 +34,19 @@ impl Env {
     }
 }
 
-pub struct Evaluator {
+pub struct Evaluator<W1: Write, W2: Write> {
     pub env: Env,
+    stdout: W1,
+    stderr: W2,
 }
 
-impl Evaluator {
-    pub fn new(env: Env) -> Self {
-        return Self { env };
+impl<W1: Write, W2: Write> Evaluator<W1, W2> {
+    pub fn new(env: Env, stdout: W1, stderr: W2) -> Self {
+        return Self {
+            env,
+            stdout,
+            stderr,
+        };
     }
 
     pub fn eval(&mut self, statements: Vec<Result<AST>>) -> Result<Value> {
@@ -49,7 +55,7 @@ impl Evaluator {
             let ast = match stmt {
                 Ok(ast) => ast,
                 Err(err) => {
-                    eprintln!("{err}");
+                    writeln!(self.stderr, "{err}").unwrap();
                     continue;
                 }
             };
@@ -72,7 +78,8 @@ impl Evaluator {
             AST::If { condition, yes, no } => self.eval_if(*condition, yes, no)?,
             AST::Print(val) => {
                 let evaluated = self.eval_ast(*val)?;
-                println!("{evaluated}");
+                writeln!(self.stdout, "{evaluated}").unwrap();
+                self.stdout.flush().unwrap();
                 Value::Idle
             }
             AST::Return { value } => {
@@ -141,8 +148,24 @@ impl Evaluator {
                             return self.eval_infix_booleans(op, left, right);
                         }
 
-                        Op::Plus
-                        | Op::Minus
+                        Op::Plus => {
+                            let left = self.eval_ast(operands.pop().unwrap())?;
+
+                            if let (Value::Number(_), Value::Number(_)) = (&left, &right) {
+                                return self.eval_infix_numbers(op, left, right);
+                            }
+                            if let (Value::String(lstr), Value::String(rstr)) = (&left, &right) {
+                                let concatenated: Rc<str> =
+                                    format!("{}{}", lstr.to_string(), rstr.to_string()).into();
+                                return Ok(Value::String(concatenated));
+                            }
+
+                            return Err(anyhow!(
+                                "[operation: {op} ] Type mismatch: '{left}' {op} '{right}'"
+                            ));
+                        }
+
+                        Op::Minus
                         | Op::Star
                         | Op::Greater
                         | Op::GreaterEqual
@@ -366,12 +389,20 @@ impl Evaluator {
     fn eval_infix_numbers(&self, op: Op, l_val: Value, r_val: Value) -> Result<Value> {
         let left = match l_val {
             Value::Number(num) => num,
-            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
+            value => {
+                return Err(anyhow!(
+                    "[operation: {op} ] Type mismatch: '{value}' expected number"
+                ))
+            }
         };
 
         let right = match r_val {
             Value::Number(num) => num,
-            value => return Err(anyhow!("[operation: {op} ] Type mismatch: '{value}'")),
+            value => {
+                return Err(anyhow!(
+                    "[operation: {op} ] Type mismatch: '{value}' expected number"
+                ))
+            }
         };
 
         let result = match op {
@@ -547,6 +578,8 @@ impl fmt::Display for Value {
 
 #[cfg(test)]
 mod test {
+    use std::io;
+
     use anyhow::Result;
 
     use crate::{eval::Value, parser::Parser};
@@ -581,7 +614,9 @@ mod test {
 
         for (code, expected) in input {
             let program = Parser::new(code.into()).parse();
-            let result = Evaluator::new(Env::new()).eval(program).unwrap();
+            let result = Evaluator::new(Env::new(), io::stdout(), io::stderr())
+                .eval(program)
+                .unwrap();
 
             println!("expected: {expected}, got: {result}");
             assert_eq!(expected, result);
