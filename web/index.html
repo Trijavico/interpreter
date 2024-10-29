@@ -4,10 +4,39 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite App</title>
+    <title>Monkeylang</title>
+	<link rel="stylesheet" href="./css/styles.css">
+	<link rel="stylesheet" href="./css/components.css">
   </head>
   <body>
-    <div id="app"></div>
+	<div class="min-h-dvh relative grid grid-rows-[auto_2fr_1fr]">
+		<header class="bg-gradient-to-br from-[#D8D5D3] to-[#C2BFBE]">
+			<nav>
+				<ul class="flex justify-between items-center px-8 py-2">
+					<li class="font-bold text-2xl">Monkeylang</li>
+					<li class="flex">
+						<button id="run" class="group bg-black rounded-[0.125rem] shadow-[0.0625rem_0.0625rem_0.0625rem_rgba(255,255,255,0.6)] border-[3px] border-solid border-transparent" >
+							<span class="group-active:scale-[0.98] group-active:bg-[#ee5529] group-active:shadow-custom-active min-w-24 inline-block relative bg-[#f05a22] p-[.4375rem_0.75rem_0.625rem] text-center tracking-[2px] rounded-[.5625rem] outline-none border-none text-white uppercase shadow-custom-btn transition-all duration-100 [transition-timing-function:cubic-bezier(0.25,_0.5,_0.5,_1)]" >RUN</span>
+						</button>
+					</li>
+				</ul>
+			</nav>
+		</header>
+
+		<main id="container" class="bg-[#E3DFDD] relative before:content-[''] before:z-20 before:shadow-custom-dot before:absolute before:block before:left-3 before:top-3 before:rounded-full before:w-[30px] before:h-[30px] before:bg-[#E3DFDD] after:content-[''] after:shadow-custom-dot after:z-20 after:absolute after:block after:left-3 after:bottom-3 after:rounded-full after:w-[30px] after:h-[30px] after:bg-[#E3DFDD]" >
+			<div class="shadow-custom-dot bg-[#E3DFDD] absolute block right-3 top-3 rounded-full w-[30px] h-[30px] z-20"></div>
+			<div  class="py-7 px-9 h-full w-full"> 
+				<div id="editor" class="h-full max-h-[391px] w-full relative isolate border-[3px] border-solid border-[#C4C1BF] before:-z-10 after:-z-10 before:content-[''] before:block before:absolute before:inset-0 before:border-t-[2px] before:border-solid before:border-[#ffffffa8] after:content-[''] after:block after:absolute after:-inset-x-1 after:-inset-y-[5px] after:border-b-[2px] after:border-solid after:border-[#ffffffa8]"></div>
+				<div class="shadow-custom-dot bg-[#E3DFDD] absolute block right-3 bottom-3 rounded-full w-[30px] h-[30px] z-20"></div>
+			</div>
+		</main>
+
+		<div class="relative bg-[#E3DFDD] min-h-[200px]">
+			<div id="console" class="before:content-[''] before:shadow-console before:z-10 before:block before:absolute before:inset-x-0 before:-inset-y-[1px] after:content-[''] after:block after:absolute after:-inset-[500px] after:opacity-30 border-[3px] border-solid border-[#3d3748] bg-[#181818] absolute inset-3 rounded-[.92rem] overflow-hidden isolate"> 
+			</div>
+		</div>
+	</div>
+
     <script type="module" src="/main.js"></script>
   </body>
 </html>
