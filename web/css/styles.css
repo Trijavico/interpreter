@@ -680,6 +680,10 @@ video {
   justify-content: space-between;
 }
 
+.overflow-auto {
+  overflow: auto;
+}
+
 .overflow-hidden {
   overflow: hidden;
 }
@@ -760,20 +764,12 @@ video {
   --tw-gradient-to: #C2BFBE var(--tw-gradient-to-position);
 }
 
-.p-7 {
-  padding: 1.75rem;
+.p-4 {
+  padding: 1rem;
 }
 
 .p-\[\.4375rem_0\.75rem_0\.625rem\] {
   padding: .4375rem 0.75rem 0.625rem;
-}
-
-.p-6 {
-  padding: 1.5rem;
-}
-
-.p-4 {
-  padding: 1rem;
 }
 
 .px-8 {
@@ -821,14 +817,14 @@ video {
   letter-spacing: 2px;
 }
 
-.text-white {
-  --tw-text-opacity: 1;
-  color: rgb(255 255 255 / var(--tw-text-opacity));
-}
-
 .text-\[\#4AF626\] {
   --tw-text-opacity: 1;
   color: rgb(74 246 38 / var(--tw-text-opacity));
+}
+
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity));
 }
 
 .shadow-\[0\.0625rem_0\.0625rem_0\.0625rem_rgba\(255\2c 255\2c 255\2c 0\.6\)\] {
@@ -1056,6 +1052,31 @@ video {
 .after\:opacity-30::after {
   content: var(--tw-content);
   opacity: 0.3;
+}
+
+.after\:opacity-40::after {
+  content: var(--tw-content);
+  opacity: 0.4;
+}
+
+.after\:opacity-25::after {
+  content: var(--tw-content);
+  opacity: 0.25;
+}
+
+.after\:opacity-15::after {
+  content: var(--tw-content);
+  opacity: 0.15;
+}
+
+.after\:opacity-5::after {
+  content: var(--tw-content);
+  opacity: 0.05;
+}
+
+.after\:opacity-20::after {
+  content: var(--tw-content);
+  opacity: 0.2;
 }
 
 .after\:shadow-custom-dot::after {

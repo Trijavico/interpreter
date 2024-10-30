@@ -1,6 +1,8 @@
 .cm-editor {
 	height: 100%;
 	overflow: hidden;
+	font-size: 14px;
+	color: #00000085;
 }
 
 .cm-scroller {
@@ -27,12 +29,23 @@
 #console::after {
 	background: transparent url('/noise.png') 0 0;
 	background-size: 320px 320px;
-	opacity: .3;
 	animation: noise 1s steps(8, end) infinite both;
+}
+
+#console_output::-webkit-scrollbar {
+	width: 6px;
+	background-color: transparent;
+}
+
+#console_output::-webkit-scrollbar-thumb {
+	border-radius: 15px;
+	background-color: #00A800;
 }
 
 #console_output span {
 	display: block;
+	opacity: .8;
+	text-shadow: 0 0 7px #4AF626;
 	padding-bottom: .32rem;
 }
 
