@@ -10,7 +10,8 @@
     "css": "tailwindcss -i ./css/input.css -o ./css/styles.css --watch"
   },
   "devDependencies": {
-    "vite": "^5.4.9"
+    "vite": "^5.4.9",
+    "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
     "@codemirror/state": "^6.4.1",
