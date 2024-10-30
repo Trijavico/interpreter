@@ -12,30 +12,18 @@ use crate::{
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
-
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log_element(e: &JsValue);
 }
 
-struct ConsoleWriter {
+struct ConsoleStdErr {
     console: HtmlElement,
 }
 
-impl ConsoleWriter {
-    pub fn new(console: HtmlElement) -> Self {
-        return ConsoleWriter { console };
-    }
-}
-
-impl Write for ConsoleWriter {
+impl Write for ConsoleStdErr {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if let Ok(new_value) = String::from_utf8(buf.to_vec()) {
             let trimmed_value = new_value.trim();
-            if trimmed_value.is_empty() {
-                return Ok(buf.len());
-            }
-
             let prev_values = self.console.inner_html();
+
             let new_html = if prev_values.is_empty() {
                 format!("<span>{trimmed_value}</span>")
             } else {
@@ -43,7 +31,6 @@ impl Write for ConsoleWriter {
             };
 
             self.console.set_inner_html(&new_html);
-
             return Ok(buf.len());
         }
 
@@ -55,10 +42,60 @@ impl Write for ConsoleWriter {
     }
 }
 
+struct ConsoleStdOut {
+    console: HtmlElement,
+    buffer: String,
+}
+
+impl ConsoleStdOut {
+    pub fn new(console: HtmlElement) -> Self {
+        return ConsoleStdOut {
+            console,
+            buffer: String::new(),
+        };
+    }
+
+    fn flush_to_dom(&mut self) {
+        if self.buffer.is_empty() {
+            return;
+        }
+
+        let prev_values = self.console.inner_html();
+        let new_html = if prev_values.is_empty() {
+            format!("<span>{}</span>", self.buffer)
+        } else {
+            format!("{prev_values}<span>{}</span>", self.buffer)
+        };
+
+        self.console.set_inner_html(&new_html);
+        self.buffer.clear();
+    }
+}
+
+impl Write for ConsoleStdOut {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(new_value) = String::from_utf8(buf.to_vec()) {
+            let trimmed_value = new_value.trim();
+            if !trimmed_value.is_empty() {
+                self.buffer.push_str(trimmed_value);
+            }
+
+            return Ok(buf.len());
+        }
+
+        return Ok(0);
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.flush_to_dom();
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 pub fn eval_code(code: String, console: HtmlElement) -> String {
-    let stderr = ConsoleWriter::new(console.clone());
-    let stdout = ConsoleWriter::new(console);
+    let stdout = ConsoleStdOut::new(console.clone());
+    let stderr = ConsoleStdErr { console };
 
     let ast = Parser::new(code).parse();
     let mut evaluator = Evaluator::new(Env::new(), stdout, stderr);
