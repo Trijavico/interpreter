@@ -49,8 +49,8 @@ impl<W1: Write, W2: Write> Evaluator<W1, W2> {
         };
     }
 
-    pub fn eval(&mut self, statements: Vec<Result<AST>>) -> Result<Value> {
-        let mut result = Ok(Value::Idle);
+    pub fn eval(&mut self, statements: Vec<Result<AST>>) -> Value {
+        let mut result = Value::Idle;
         for stmt in statements {
             let ast = match stmt {
                 Ok(ast) => ast,
@@ -60,13 +60,25 @@ impl<W1: Write, W2: Write> Evaluator<W1, W2> {
                 }
             };
             if matches!(ast, AST::Return { .. }) {
-                return self.eval_ast(ast);
+                match self.eval_ast(ast) {
+                    Ok(value) => return value,
+                    Err(err) => {
+                        writeln!(self.stderr, "{err}").unwrap();
+                        return Value::Idle;
+                    }
+                }
             }
 
-            result = self.eval_ast(ast);
-            if matches!(result, Err(_)) || matches!(result, Ok(Value::Return(_))) {
-                return result;
+            let val = self.eval_ast(ast);
+            if let Ok(Value::Return(_)) = val {
+                return val.unwrap();
             }
+            if let Err(err) = val {
+                writeln!(self.stderr, "{err}").unwrap();
+                return Value::Idle;
+            }
+
+            result = val.unwrap();
         }
 
         return result;
@@ -614,9 +626,7 @@ mod test {
 
         for (code, expected) in input {
             let program = Parser::new(code.into()).parse();
-            let result = Evaluator::new(Env::new(), io::stdout(), io::stderr())
-                .eval(program)
-                .unwrap();
+            let result = Evaluator::new(Env::new(), io::stdout(), io::stderr()).eval(program);
 
             println!("expected: {expected}, got: {result}");
             assert_eq!(expected, result);

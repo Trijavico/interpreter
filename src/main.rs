@@ -83,10 +83,8 @@ fn main() {
 
             let program = parser.parse();
 
-            match evaluator.eval(program) {
-                Ok(result) => println!("{result}"),
-                Err(err) => println!("{}", err),
-            };
+            let result = evaluator.eval(program);
+            println!("{result}");
         }
         _ => eprint!("Unknown command: {}", command),
     }

@@ -11,7 +11,4 @@ const view = new EditorView({
 	parent: document.querySelector('#editor'),
 });
 
-let btn = document.querySelector('#run');
-btn.addEventListener('click', function() {
-	console.log(view.state.doc.toString());
-})
+export default view;

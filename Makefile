@@ -1,6 +1,9 @@
-
-wasm:
+wasm: clean
 	@wasm-pack build && \
-	rm pkg/*.ts pkg/README.md pkg/.gitignore pkg/*.json
+	rm pkg/*.ts pkg/README.md pkg/.gitignore pkg/*.json && \
+	mv ./pkg ./web/
 
-.PHONY: wasm
+clean:
+	rm -rf ./web/pkg/
+
+.PHONY: wasm clean

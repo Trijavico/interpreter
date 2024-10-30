@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::io::{self, Write};
 
 use crate::{
-    eval::{self, Env, Evaluator},
+    eval::{Env, Evaluator},
     parser::Parser,
 };
 
@@ -23,13 +23,7 @@ pub fn start() -> Result<()> {
         line = line.trim().to_string();
         let mut parser = Parser::new(line);
 
-        match evalator.eval(parser.parse()) {
-            Ok(result) => {
-                if !matches!(result, eval::Value::Idle) {
-                    println!("{result}");
-                }
-            }
-            Err(err) => println!("{}", err),
-        }
+        let result = evalator.eval(parser.parse());
+        println!("{result}");
     }
 }
