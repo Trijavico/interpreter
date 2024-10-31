@@ -1,6 +1,5 @@
 wasm: clean
-	@wasm-pack build && \
-	rm pkg/*.ts pkg/README.md pkg/.gitignore pkg/*.json && \
+	@wasm-pack build --target web --release && \
 	mv ./pkg ./web/
 
 clean:
