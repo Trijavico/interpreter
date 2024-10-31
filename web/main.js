@@ -1,7 +1,8 @@
 import "./scripts/editor.js"
-import { eval_code } from "./pkg/monkelang.js"
+import init, { eval_code } from "./pkg/monkelang.js"
 import view from "./scripts/editor.js";
 
+await init();
 let $run = document.querySelector("#run");
 let $console = document.querySelector("#console_output");
 
