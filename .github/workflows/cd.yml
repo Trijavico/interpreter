@@ -16,11 +16,14 @@ jobs:
         with:
           node-version: 20 
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      - name: Build with wasm-pack
-        run: make wasm
+      - name: Build web project
+        run: make prod
 
       - name: Deploy to netlify
         uses: nwtgck/actions-netlify@v3.0

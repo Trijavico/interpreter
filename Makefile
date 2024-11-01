@@ -1,3 +1,6 @@
+prod: wasm
+	@cd ./web && pnpm install && pnpm build
+
 wasm: clean
 	@wasm-pack build --target web --release && \
 	mv ./pkg ./web/
@@ -5,4 +8,4 @@ wasm: clean
 clean:
 	rm -rf ./web/pkg/
 
-.PHONY: wasm clean
+.PHONY: wasm clean prod
