@@ -1,0 +1,31 @@
+name: cd
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Netlify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20 
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build with wasm-pack
+        run: make wasm
+
+      - name: Deploy to netlify
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: './web/dist'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
