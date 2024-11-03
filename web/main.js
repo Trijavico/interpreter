@@ -1,6 +1,6 @@
-import "./scripts/editor.js"
 import init, { eval_code } from "./pkg/monkelang.js"
 import view from "./scripts/editor.js";
+import "./scripts/templates.js";
 
 await init();
 let $run = document.querySelector("#run");
@@ -19,3 +19,4 @@ $run.addEventListener('click', function() {
 		$run.disabled = false;
 	}, 1000);
 });
+

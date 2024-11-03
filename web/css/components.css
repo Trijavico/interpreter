@@ -1,6 +1,11 @@
+body {
+	height: 100dvh;
+	max-height: 100dvh;
+}
+
 .cm-editor {
 	height: 100%;
-	overflow: hidden;
+	overflow: auto;
 	font-size: 14px;
 	color: #00000085;
 }
@@ -26,10 +31,37 @@
 	-webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
 }
 
-#console::after {
+#ghb_icon {
+	z-index: 10;
+	filter: drop-shadow(0 0 2px #4AF626);
+	transition: all 250ms ease-out;
+}
+
+#ghb_icon:hover {
+	filter: drop-shadow(0 0 12px #33f70a);
+}
+
+#console::after,
+#templ_btn::after {
 	background: transparent url('/noise.png') 0 0;
 	background-size: 320px 320px;
 	animation: noise 1s steps(8, end) infinite both;
+}
+
+#templ_btn span {
+	text-align: center;
+	opacity: .8;
+	text-shadow: 0 0 10px #4AF626;
+
+}
+
+#select_btns button {
+	transition: transform 230ms ease;
+	filter: drop-shadow(0 0 19px #33f70a);
+}
+
+#select_btns button:active {
+	transform: scale(.8);
 }
 
 #console_output::-webkit-scrollbar {
@@ -44,6 +76,7 @@
 
 #console_output span {
 	display: block;
+	padding-right: 60px;
 	opacity: .8;
 	text-shadow: 0 0 7px #4AF626;
 	padding-bottom: .32rem;

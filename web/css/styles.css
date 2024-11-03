@@ -608,8 +608,16 @@ video {
   right: 0.75rem;
 }
 
+.right-5 {
+  right: 1.25rem;
+}
+
 .top-3 {
   top: 0.75rem;
+}
+
+.top-5 {
+  top: 1.25rem;
 }
 
 .isolate {
@@ -648,12 +656,24 @@ video {
   max-height: 391px;
 }
 
+.max-h-full {
+  max-height: 100%;
+}
+
+.max-h-dvh {
+  max-height: 100dvh;
+}
+
 .min-h-\[200px\] {
   min-height: 200px;
 }
 
 .min-h-dvh {
   min-height: 100dvh;
+}
+
+.min-h-full {
+  min-height: 100%;
 }
 
 .w-\[30px\] {
@@ -668,16 +688,56 @@ video {
   min-width: 6rem;
 }
 
+.min-w-28 {
+  min-width: 7rem;
+}
+
+.min-w-\[177px\] {
+  min-width: 177px;
+}
+
+.auto-cols-auto {
+  grid-auto-columns: auto;
+}
+
+.grid-flow-col {
+  grid-auto-flow: column;
+}
+
+.grid-cols-\[1fr_auto\] {
+  grid-template-columns: 1fr auto;
+}
+
 .grid-rows-\[auto_2fr_1fr\] {
   grid-template-rows: auto 2fr 1fr;
+}
+
+.flex-row {
+  flex-direction: row;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.place-content-center {
+  place-content: center;
 }
 
 .items-center {
   align-items: center;
 }
 
+.justify-end {
+  justify-content: flex-end;
+}
+
 .justify-between {
   justify-content: space-between;
+}
+
+.gap-5 {
+  gap: 1.25rem;
 }
 
 .overflow-auto {
@@ -686,6 +746,10 @@ video {
 
 .overflow-hidden {
   overflow: hidden;
+}
+
+.rounded-\[\.42rem\] {
+  border-radius: .42rem;
 }
 
 .rounded-\[\.5625rem\] {
@@ -790,6 +854,11 @@ video {
 .py-7 {
   padding-top: 1.75rem;
   padding-bottom: 1.75rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .text-center {
@@ -1047,31 +1116,6 @@ video {
   content: var(--tw-content);
   --tw-bg-opacity: 1;
   background-color: rgb(227 223 221 / var(--tw-bg-opacity));
-}
-
-.after\:opacity-30::after {
-  content: var(--tw-content);
-  opacity: 0.3;
-}
-
-.after\:opacity-40::after {
-  content: var(--tw-content);
-  opacity: 0.4;
-}
-
-.after\:opacity-25::after {
-  content: var(--tw-content);
-  opacity: 0.25;
-}
-
-.after\:opacity-15::after {
-  content: var(--tw-content);
-  opacity: 0.15;
-}
-
-.after\:opacity-5::after {
-  content: var(--tw-content);
-  opacity: 0.05;
 }
 
 .after\:opacity-20::after {
