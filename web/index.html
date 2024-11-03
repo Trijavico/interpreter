@@ -7,20 +7,22 @@
     <title>Monkeylang</title>
 	<link rel="stylesheet" href="./css/styles.css">
 	<link rel="stylesheet" href="./css/components.css">
+    <script defer type="module" src="/main.js"></script>
+	<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
   </head>
   <body>
-	<div class="min-h-dvh relative grid grid-rows-[auto_2fr_1fr]">
+		<div class="min-h-dvh max-h-dvh relative grid grid-rows-[auto_2fr_1fr]" x-data="display">
 		<header class="bg-gradient-to-br from-[#D8D5D3] to-[#C2BFBE]">
 			<nav>
 				<ul class="flex justify-between items-center px-8 py-2">
 					<li class="font-bold text-2xl">Monkeylang</li>
 					<li class="flex gap-5">
 						<div id="templ_btn" class="min-h-full min-w-[177px] relative before:content-[''] before:shadow-console before:-z-10 before:block before:absolute before:inset-x-0 before:-inset-y-[1px] after:content-[''] after:block after:-z-10 after:absolute after:-inset-[500px] after:opacity-20 border-[3px] border-solid border-[#3d3748] bg-[#181818] rounded-[.42rem] overflow-hidden isolate semibold text-[#4AF626] grid grid-cols-[1fr_auto] items-center grid-flow-col px-4">
-							<span>Hello world</span>
+							<span x-text="title"></span>
 							<div id="select_btns" class="flex flex-col">
-								<button><svg  xmlns="http://www.w3.org/2000/svg"  width="14"  height="14"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-caret-up"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M11.293 7.293a1 1 0 0 1 1.32 -.083l.094 .083l6 6l.083 .094l.054 .077l.054 .096l.017 .036l.027 .067l.032 .108l.01 .053l.01 .06l.004 .057l.002 .059l-.002 .059l-.005 .058l-.009 .06l-.01 .052l-.032 .108l-.027 .067l-.07 .132l-.065 .09l-.073 .081l-.094 .083l-.077 .054l-.096 .054l-.036 .017l-.067 .027l-.108 .032l-.053 .01l-.06 .01l-.057 .004l-.059 .002h-12c-.852 0 -1.297 -.986 -.783 -1.623l.076 -.084l6 -6z" /></svg></button>
+								<button x-on:click="increment()"><svg  xmlns="http://www.w3.org/2000/svg"  width="14"  height="14"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-caret-up"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M11.293 7.293a1 1 0 0 1 1.32 -.083l.094 .083l6 6l.083 .094l.054 .077l.054 .096l.017 .036l.027 .067l.032 .108l.01 .053l.01 .06l.004 .057l.002 .059l-.002 .059l-.005 .058l-.009 .06l-.01 .052l-.032 .108l-.027 .067l-.07 .132l-.065 .09l-.073 .081l-.094 .083l-.077 .054l-.096 .054l-.036 .017l-.067 .027l-.108 .032l-.053 .01l-.06 .01l-.057 .004l-.059 .002h-12c-.852 0 -1.297 -.986 -.783 -1.623l.076 -.084l6 -6z" /></svg></button>
 
-								<button><svg  xmlns="http://www.w3.org/2000/svg"  width="14"  height="14"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-caret-down"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M18 9c.852 0 1.297 .986 .783 1.623l-.076 .084l-6 6a1 1 0 0 1 -1.32 .083l-.094 -.083l-6 -6l-.083 -.094l-.054 -.077l-.054 -.096l-.017 -.036l-.027 -.067l-.032 -.108l-.01 -.053l-.01 -.06l-.004 -.057v-.118l.005 -.058l.009 -.06l.01 -.052l.032 -.108l.027 -.067l.07 -.132l.065 -.09l.073 -.081l.094 -.083l.077 -.054l.096 -.054l.036 -.017l.067 -.027l.108 -.032l.053 -.01l.06 -.01l.057 -.004l12.059 -.002z" /></svg></button>
+								<button x-on:click="decrement()"><svg  xmlns="http://www.w3.org/2000/svg"  width="14"  height="14"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-caret-down"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M18 9c.852 0 1.297 .986 .783 1.623l-.076 .084l-6 6a1 1 0 0 1 -1.32 .083l-.094 -.083l-6 -6l-.083 -.094l-.054 -.077l-.054 -.096l-.017 -.036l-.027 -.067l-.032 -.108l-.01 -.053l-.01 -.06l-.004 -.057v-.118l.005 -.058l.009 -.06l.01 -.052l.032 -.108l.027 -.067l.07 -.132l.065 -.09l.073 -.081l.094 -.083l.077 -.054l.096 -.054l.036 -.017l.067 -.027l.108 -.032l.053 -.01l.06 -.01l.057 -.004l12.059 -.002z" /></svg></button>
 							</div>
 						</div>
 
@@ -32,10 +34,10 @@
 			</nav>
 		</header>
 
-		<main id="container" class="bg-[#E3DFDD] relative before:content-[''] before:z-20 before:shadow-custom-dot before:absolute before:block before:left-3 before:top-3 before:rounded-full before:w-[30px] before:h-[30px] before:bg-[#E3DFDD] after:content-[''] after:shadow-custom-dot after:z-20 after:absolute after:block after:left-3 after:bottom-3 after:rounded-full after:w-[30px] after:h-[30px] after:bg-[#E3DFDD]" >
+		<main id="container" class="overflow-hidden bg-[#E3DFDD] relative before:content-[''] before:z-20 before:shadow-custom-dot before:absolute before:block before:left-3 before:top-3 before:rounded-full before:w-[30px] before:h-[30px] before:bg-[#E3DFDD] after:content-[''] after:shadow-custom-dot after:z-20 after:absolute after:block after:left-3 after:bottom-3 after:rounded-full after:w-[30px] after:h-[30px] after:bg-[#E3DFDD]" >
 			<div class="shadow-custom-dot bg-[#E3DFDD] absolute block right-3 top-3 rounded-full w-[30px] h-[30px] z-20"></div>
 			<div  class="py-7 px-9 h-full w-full"> 
-				<div id="editor" class="h-full max-h-[391px] w-full relative isolate border-[3px] border-solid border-[#C4C1BF] before:-z-10 after:-z-10 before:content-[''] before:block before:absolute before:inset-0 before:border-t-[2px] before:border-solid before:border-[#ffffffa8] after:content-[''] after:block after:absolute after:-inset-x-1 after:-inset-y-[5px] after:border-b-[2px] after:border-solid after:border-[#ffffffa8]"></div>
+				<div id="editor" class="h-full w-full relative isolate border-[3px] border-solid border-[#C4C1BF] before:-z-10 after:-z-10 before:content-[''] before:block before:absolute before:inset-0 before:border-t-[2px] before:border-solid before:border-[#ffffffa8] after:content-[''] after:block after:absolute after:-inset-x-1 after:-inset-y-[5px] after:border-b-[2px] after:border-solid after:border-[#ffffffa8]"></div>
 				<div class="shadow-custom-dot bg-[#E3DFDD] absolute block right-3 bottom-3 rounded-full w-[30px] h-[30px] z-20"></div>
 			</div>
 		</main>
@@ -48,6 +50,5 @@
 		</div>
 	</div>
 
-    <script type="module" src="/main.js"></script>
   </body>
 </html>

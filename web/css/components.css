@@ -1,6 +1,11 @@
+body {
+	height: 100dvh;
+	max-height: 100dvh;
+}
+
 .cm-editor {
 	height: 100%;
-	overflow: hidden;
+	overflow: auto;
 	font-size: 14px;
 	color: #00000085;
 }
