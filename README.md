@@ -2,6 +2,8 @@
 
 This project is a Rust implementation of the interpreter for the **monkelang** programming language, originally designed by **Thorsten Ball**. The interpreter includes a command-line interface (CLI) with multiple functionalities.
 
+![App Screenshot](./.github/app_image.png)
+
 ## Language features
 - Variable bindings
 - Integers and booleans
